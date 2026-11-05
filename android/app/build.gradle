@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Bundle the allo OS web shell (the repository root) into the APK's assets.
+def webRoot = rootProject.projectDir.parentFile
+def webOut = file('src/main/assets/www')
+delete webOut
+copy {
+    from(webRoot) {
+        include 'index.html', 'manifest.webmanifest', 'sw.js'
+        include 'os/**', 'sdk/**', 'apps/**', 'icons/**', 'examples/**'
+    }
+    into webOut
+}
+
+def runNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+
+android {
+    namespace 'os.allo.launcher'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'os.allo.launcher'
+        minSdk 26
+        targetSdk 35
+        versionCode runNumber
+        versionName "1.0.${runNumber}"
+    }
+
+    signingConfigs {
+        // A fixed key so every build can update the previous one.
+        allo {
+            storeFile file('../allo-release.keystore')
+            storePassword 'allo-os-public'
+            keyAlias 'allo'
+            keyPassword 'allo-os-public'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.allo
+        }
+        debug {
+            signingConfig signingConfigs.allo
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

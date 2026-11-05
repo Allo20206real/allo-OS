@@ -42,6 +42,14 @@
       d.ok ? p.resolve(d.result) : p.reject(new Error(d.error));
     } else if (d.type === 'allo:event') emit(d.name, d.data);
     else if (d.type === 'allo:visibility') { allo.env.visible = d.visible; emit(d.visible ? 'show' : 'hide'); }
+    else if (d.type === 'allo:back') {
+      // Android Back: close an open sheet, or let the app go back a screen. Unhandled = go home.
+      let handled = false;
+      const sheet = document.querySelector('.sheet');
+      if (sheet && sheet.close) { sheet.close(); handled = true; }
+      else handled = (listeners.back || []).some(f => { try { return f() === true; } catch { return false; } });
+      window.parent.postMessage({ type: 'allo:back-result', id: d.id, handled }, '*');
+    }
   });
 
   /** Call a system method. Resolves with its result. */
@@ -56,7 +64,12 @@
   allo.open = id => allo.call('open', id);
   allo.home = () => window.parent.postMessage({ type: 'allo:home' }, '*');
   allo.statusBar = style => inOS && allo.call('setStatusBar', style);
-  allo.haptic = (ms = 10) => navigator.vibrate?.(ms);
+  allo.haptic = (ms = 10) => {
+    try { if (window.parent.AlloNative) return window.parent.AlloNative.haptic(ms > 20 ? 'long' : 'light'); } catch {}
+    navigator.vibrate?.(ms);
+  };
+  /** true when allo is the phone's real home screen (Android). */
+  allo.native = (() => { try { return !!window.parent.AlloNative; } catch { return false; } })();
 
   /** Small key/value store, namespaced per app and removed on uninstall. */
   const prefix = `app.${allo.appId}.`;

@@ -150,6 +150,7 @@ function search() {
 }
 function choose(p) { place = p; data = null; allo.store.set('place', p); render(); fetchWx(); }
 
+allo.on('back', () => { if (place && document.getElementById('q')) { render(); return true; } });
 render();
 if (place && (!data || Date.now() - data.at > 10 * 60e3 || data.unit !== unit)) fetchWx();
 allo.on('show', () => { if (place && data && Date.now() - data.at > 10 * 60e3) fetchWx(); });

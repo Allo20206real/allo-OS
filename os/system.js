@@ -23,9 +23,21 @@ const el = {
 /* =========================================================================
    State
    ========================================================================= */
+// On Android, allo runs as the phone's real home screen and talks to the
+// system through window.AlloNative (see android/).
+const NATIVE = window.AlloNative || null;
+const nativeCall = (fn, fallback = null) => { try { return fn(); } catch (e) { console.warn(e); return fallback; } };
+if (NATIVE) {
+  document.documentElement.classList.add('native');
+  const i = nativeCall(() => JSON.parse(NATIVE.insets()), null);
+  if (i) { document.documentElement.style.setProperty('--sat', i.top + 'px'); document.documentElement.style.setProperty('--sab', i.bottom + 'px'); }
+}
+let nativeDark = NATIVE ? nativeCall(() => NATIVE.isDark(), false) : false;
+let nativeWallLight = NATIVE ? nativeCall(() => NATIVE.wallpaperLight(), false) : false;
+
 const DEFAULTS = {
   v: 1, setup: false, installed: [], home: [], dock: [], external: {}, notes: [],
-  settings: { theme: 'light', wallpaper: 'aurora', accent: '#2f7cf6', clock24: false, autoLock: true, wallLight: false, name: '' }
+  settings: { theme: NATIVE ? 'auto' : 'light', wallpaper: NATIVE ? 'system' : 'aurora', accent: '#2f7cf6', clock24: false, autoLock: !NATIVE, wallLight: false, name: '' }
 };
 const clone = o => JSON.parse(JSON.stringify(o));
 function loadState() {
@@ -47,7 +59,8 @@ function save() {
 
 const catalog = new Map();          // id -> manifest from apps/catalog.json
 const installing = new Map();       // id -> progress 0..100
-function getApp(id) { return catalog.get(id) || state.external[id] || null; }
+const nativeApps = new Map();      // id -> the phone's real apps (Android)
+function getApp(id) { return catalog.get(id) || nativeApps.get(id) || state.external[id] || null; }
 const isInstalled = id => state.installed.includes(id);
 
 /* =========================================================================
@@ -65,7 +78,7 @@ addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt
 addEventListener('appinstalled', () => { installPrompt = null; toast({ title: 'allo OS installed', body: 'Open it from your home screen.' }); });
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-const resolvedTheme = () => state.settings.theme === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : state.settings.theme;
+const resolvedTheme = () => state.settings.theme === 'auto' ? ((NATIVE ? nativeDark : darkQuery.matches) ? 'dark' : 'light') : state.settings.theme;
 darkQuery.addEventListener?.('change', () => applyTheme());
 
 /* =========================================================================
@@ -84,7 +97,11 @@ function applyTheme() {
 function applyWallpaper() {
   const s = state.settings;
   let light;
-  if (s.wallpaper === 'custom') {
+  if (s.wallpaper === 'system') {
+    if (!NATIVE) { s.wallpaper = 'aurora'; return applyWallpaper(); }
+    el.wallpaper.style.background = 'transparent';   // the real phone wallpaper shows through
+    light = nativeWallLight;
+  } else if (s.wallpaper === 'custom') {
     let url = null;
     try { url = localStorage.getItem(WALL_KEY); } catch {}
     if (url) { el.wallpaper.style.background = `#222 url("${url}") center / cover no-repeat`; light = !!s.wallLight; }
@@ -157,6 +174,7 @@ function updateChrome() {
   }
   el.statusbar.classList.toggle('dark', darkText);
   el.homebar.classList.toggle('dark', darkText);
+  if (NATIVE) nativeCall(() => NATIVE.setStatusBarStyle(darkText));
 }
 
 /* =========================================================================
@@ -178,7 +196,7 @@ function makeIcon(id) {
   b.tabIndex = 0;
   b.setAttribute('role', 'button');
   b.setAttribute('aria-label', app.name);
-  if (app.system) b.classList.add('locked');
+  if (app.system || app.locked) b.classList.add('locked');
   if (id === dragId) b.classList.add('ghost');
   const p = installing.get(id);
   if (p != null) { b.classList.add('installing'); b.style.setProperty('--p', p); }
@@ -425,7 +443,7 @@ el.home.addEventListener('pointerdown', e => {
     if (!press) return;
     press.long = true;
     press.el.classList.remove('pressed');
-    navigator.vibrate?.(12);
+    haptic();
     if (!editing) {
       enterEdit();
       // re-find the element after re-render
@@ -449,7 +467,8 @@ addEventListener('pointermove', e => {
       const fromTop = vg.top;
       vg = null;
       cancelPress();
-      if (fromTop) openControl(); else openSearch();
+      if (fromTop) { if (!(NATIVE && nativeCall(() => NATIVE.expandNotifications(), false))) openControl(); }
+      else openSearch();
     }
   }
 });
@@ -570,7 +589,8 @@ function launch(id, fromEl) {
   const app = getApp(id);
   if (!app || animating) return;
   if (installing.has(id)) return;
-  if (app.webclip) { window.open(app.url, '_blank', 'noopener'); return; }
+  if (app.native) { launchNative(app, fromEl); return; }
+  if (app.webclip) { if (NATIVE) NATIVE.openUrl(app.url); else window.open(app.url, '_blank', 'noopener'); return; }
   closeSearch(true);
   closeControl();
   if (inRecents) exitRecents();
@@ -597,6 +617,15 @@ function launch(id, fromEl) {
   rec.el.style.transform = ''; rec.el.style.clipPath = '';
   a.onfinish = a.oncancel = () => { animating = false; };
   setTimeout(() => { animating = false; }, 600);
+}
+
+function launchNative(app, fromEl) {
+  const g = fromEl ? (fromEl.querySelector('.glyph') || fromEl) : $(`.icon[data-id="${CSS.escape(app.id)}"] .glyph`, el.home);
+  const r = g?.getBoundingClientRect();
+  const k = devicePixelRatio || 1;
+  if (r && r.width) NATIVE.launch(app.pkg, app.cls, Math.round(r.left * k), Math.round(r.top * k), Math.round(r.width * k), Math.round(r.height * k));
+  else NATIVE.launch(app.pkg, app.cls, 0, 0, 0, 0);
+  setTimeout(() => closeSearch(true), 300);
 }
 
 function suspend(id) {
@@ -876,7 +905,15 @@ function renderSearch() {
     .sort((a, b) => getApp(a).name.localeCompare(getApp(b).name));
   el.searchResults.textContent = '';
   for (const id of ids) { const i = makeIcon(id); if (i) el.searchResults.append(i); }
-  if (!ids.length) el.searchResults.innerHTML = `<div class="empty">No apps found. Try the App Store.</div>`;
+  if (!ids.length) el.searchResults.innerHTML = `<div class="empty">No apps found.${NATIVE ? '' : ' Try the App Store.'}</div>`;
+  if (NATIVE && q) {
+    const b = document.createElement('button');
+    b.className = 'play-search';
+    b.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span></span>';
+    b.querySelector('span').textContent = `Search Google Play for “${el.searchInput.value.trim()}”`;
+    b.onclick = e => { e.stopPropagation(); NATIVE.openPlay(el.searchInput.value.trim()); };
+    el.searchResults.append(b);
+  }
 }
 el.searchInput.addEventListener('input', renderSearch);
 el.searchInput.addEventListener('keydown', e => {
@@ -1089,6 +1126,7 @@ function setProgress(id, p) {
 
 async function uninstallApp(id) {
   const app = getApp(id);
+  if (app?.native) { if (!app.locked) NATIVE.uninstall(app.pkg); return; }
   if (!app || app.system) throw new Error('This app cannot be removed');
   killApp(id);
   state.installed = state.installed.filter(x => x !== id);
@@ -1107,6 +1145,7 @@ async function uninstallApp(id) {
 
 async function askUninstall(id) {
   const app = getApp(id);
+  if (app?.native) { if (!app.locked) NATIVE.uninstall(app.pkg); return; }
   if (!app || app.system) return;
   const ok = await dialog({ icon: iconUrl(app), title: `Remove “${app.name}”?`, text: 'The app and its data will be deleted from this device.', ok: 'Remove', danger: true });
   if (ok) uninstallApp(id);
@@ -1242,12 +1281,18 @@ function publicState() {
   return {
     version: VERSION,
     settings: { ...state.settings },
-    wallpapers: WALLPAPERS.map(w => ({ id: w.id, name: w.name, css: w.css, light: !!w.light })),
+    wallpapers: [
+      ...(NATIVE ? [{ id: 'system', name: 'Phone', css: 'linear-gradient(160deg,#8e9aaf,#4b5568)', light: false }] : []),
+      ...WALLPAPERS.map(w => ({ id: w.id, name: w.name, css: w.css, light: !!w.light }))
+    ],
+    native: !!NATIVE,
+    isDefaultHome: NATIVE ? nativeCall(() => NATIVE.isDefaultHome(), false) : false,
+    nativeVersion: NATIVE ? nativeCall(() => NATIVE.version(), '') : '',
     customWallpaper: state.settings.wallpaper === 'custom' ? (() => { try { return localStorage.getItem(WALL_KEY); } catch { return null; } })() : null,
     catalog: [...catalog.keys()].map(list),
     installed: state.installed.map(list).filter(Boolean),
     installing: Object.fromEntries(installing),
-    standalone: isStandalone(),
+    standalone: !!NATIVE || isStandalone(),
     canPromptInstall: !!installPrompt,
     platform: /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop',
     running: [...running.keys()],
@@ -1256,6 +1301,12 @@ function publicState() {
 }
 
 const API = {
+  openPlay: Object.assign(q => { if (!NATIVE) { window.open('https://play.google.com/store/search?c=apps&q=' + encodeURIComponent(q || '')); return; } NATIVE.openPlay(String(q || '')); }, { system: true }),
+  appInfo: Object.assign(id => { const a = getApp(id); if (a?.native) NATIVE.appInfo(a.pkg); }, { system: true }),
+  setDefaultHome: Object.assign(() => NATIVE && NATIVE.requestDefaultHome(), { system: true }),
+  openPhoneSettings: Object.assign(() => NATIVE && NATIVE.openSettings(), { system: true }),
+  saveImage: (dataUrl) => NATIVE ? NATIVE.saveImage(String(dataUrl)) : false,
+  haptic: (kind) => haptic(kind),
   notify(opts, app) { toast({ title: String(opts?.title || app.name).slice(0, 80), body: String(opts?.body || '').slice(0, 200), appId: app.id }); },
   open(id) { if (!isInstalled(id)) throw new Error('App not installed'); setTimeout(() => launch(id), 0); },
   close() { goHome(); },
@@ -1267,6 +1318,7 @@ const API = {
   installFromUrl: Object.assign(url => installFromUrl(url), { system: true }),
   uninstall: Object.assign(async id => {
     const app = getApp(id);
+    if (app?.native) { await uninstallApp(id); return false; }
     const ok = await dialog({ icon: app && iconUrl(app), title: `Remove “${app?.name}”?`, text: 'The app and its data will be deleted from this device.', ok: 'Remove', danger: true });
     if (ok) await uninstallApp(id);
     return ok;
@@ -1314,20 +1366,14 @@ addEventListener('message', async e => {
    ========================================================================= */
 addEventListener('keydown', e => {
   if (locked && state.setup && (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowUp')) { unlock(); return; }
-  if (e.key === 'Escape') {
-    if (el.dialogs.children.length) return;
-    if (!el.control.hidden) closeControl();
-    else if (!el.search.hidden) closeSearch();
-    else if (inRecents) exitRecents();
-    else if (current) goHome();
-    else if (editing) exitEdit();
-  }
+  if (e.key === 'Escape') back();
   if (!current && !locked && el.search.hidden && e.key === '/' ) { e.preventDefault(); openSearch(); }
 });
 
 /* =========================================================================
    First-run setup
    ========================================================================= */
+let setupRefresh = () => {};
 function runSetup() {
   el.setup.hidden = false;
   el.device.classList.add('setup');
@@ -1340,9 +1386,16 @@ function runSetup() {
         <button class="theme-opt ${state.settings.theme === 'dark' ? 'on' : ''}" data-theme="dark"><i style="background:linear-gradient(#2a2a2e,#111);"></i>Dark</button>
         <button class="theme-opt ${state.settings.theme === 'auto' ? 'on' : ''}" data-theme="auto"><i style="background:linear-gradient(135deg,#fff 50%,#1b1b1e 50%);"></i>Auto</button>
       </div>
-      <div class="walls">${WALLPAPERS.map(w => `<button data-wall="${w.id}" class="${w.id === state.settings.wallpaper ? 'on' : ''}" style="background:${w.css.replace(/"/g, "'")}" aria-label="${w.name}"></button>`).join('')}</div>
+      <div class="walls">${(NATIVE ? [{ id: 'system', name: 'Phone', css: 'linear-gradient(160deg,#8e9aaf,#4b5568)' }, ...WALLPAPERS.slice(0, 7)] : WALLPAPERS).map(w => `<button data-wall="${w.id}" class="${w.id === state.settings.wallpaper ? 'on' : ''}" style="background:${w.css.replace(/"/g, "'")}" aria-label="${w.name}"></button>`).join('')}</div>
       <div class="spacer"></div><button class="cta" data-next>Continue</button></div>`,
     () => {
+      if (NATIVE) {
+        const isHome = nativeCall(() => NATIVE.isDefaultHome(), false);
+        return `<div class="step"><div class="spacer"></div><img class="logo" src="icons/icon.svg" alt=""><h2>${isHome ? 'You’re all set' : 'Make allo your home screen'}</h2>
+          <div class="sub">${isHome ? 'allo is now your phone’s home screen. Press Home any time to come back here.' : 'Choose allo as your default home app so it opens every time you press Home.'}</div><div class="spacer"></div>
+          ${isHome ? '' : '<button class="cta" data-sethome style="margin-bottom:12px">Set as home screen</button>'}
+          <button class="cta" data-finish ${isHome ? '' : 'style="background:rgba(255,255,255,.18);color:#fff"'}>${isHome ? 'Start' : 'Not now'}</button></div>`;
+      }
       const p = publicState().platform;
       const how = isStandalone() ? 'allo OS is installed on this device. Enjoy!'
         : p === 'ios' ? 'To install, tap the Share button in Safari, then “Add to Home Screen”. allo OS will open full screen like a real system.'
@@ -1355,6 +1408,7 @@ function runSetup() {
   ];
   let i = 0;
   const show = () => { el.setup.innerHTML = steps[i](); };
+  setupRefresh = () => { if (!el.setup.hidden) show(); };
   show();
   el.setup.onclick = async e => {
     const t = e.target.closest('button');
@@ -1363,6 +1417,7 @@ function runSetup() {
     else if (t.dataset.wall) { setSetting('wallpaper', t.dataset.wall); show(); }
     else if ('next' in t.dataset) { i++; show(); }
     else if ('install' in t.dataset) { await API.promptInstall.call(null); show(); }
+    else if ('sethome' in t.dataset) { NATIVE.requestDefaultHome(); }
     else if ('finish' in t.dataset) {
       state.setup = true; save();
       el.setup.hidden = true;
@@ -1381,6 +1436,90 @@ function hash(s) { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCod
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /* =========================================================================
+   Phone integration (Android)
+   ========================================================================= */
+function loadNativeApps() {
+  if (!NATIVE) return;
+  const list = nativeCall(() => JSON.parse(NATIVE.apps()), []);
+  nativeApps.clear();
+  for (const a of list) {
+    const id = 'android:' + a.pkg + '/' + a.cls;
+    nativeApps.set(id, {
+      id, name: a.label, native: true, pkg: a.pkg, cls: a.cls, locked: !!a.system,
+      icon: `${BASE}__icon/${encodeURIComponent(a.pkg)}/${encodeURIComponent(a.cls)}.png?v=${a.updated}`,
+      category: 'Android app', developer: a.pkg, version: a.version || '', description: ''
+    });
+  }
+}
+
+function nativeDefaultDock() {
+  const list = nativeCall(() => JSON.parse(NATIVE.defaults()), []);
+  const ids = [];
+  for (const d of list) {
+    const id = 'android:' + d.pkg + '/' + d.cls;
+    if (nativeApps.has(id) && !ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, DOCK_MAX);
+}
+
+// New phone apps go on the home screen (no app drawer, like HyperOS); removed ones disappear.
+function syncNativeApps() {
+  if (!NATIVE) return;
+  loadNativeApps();
+  const gone = id => id.startsWith('android:') && !nativeApps.has(id);
+  for (const id of state.installed.filter(gone)) removeFromLayout(id);
+  state.installed = state.installed.filter(id => !gone(id));
+  const known = new Set(state.knownNative || []);
+  const added = [...nativeApps.keys()].filter(id => !known.has(id))
+    .sort((a, b) => nativeApps.get(a).name.localeCompare(nativeApps.get(b).name));
+  for (const id of added) {
+    if (!state.installed.includes(id)) state.installed.push(id);
+    if (!state.home.includes(id) && !state.dock.includes(id)) state.home.push(id);
+  }
+  state.knownNative = [...nativeApps.keys()];
+}
+
+function haptic(kind = 'long') {
+  if (NATIVE) nativeCall(() => NATIVE.haptic(kind));
+  else navigator.vibrate?.(kind === 'light' ? 6 : 12);
+}
+
+// Back button / gesture: let the open app go back first, then close things one at a time.
+function back() {
+  if (el.dialogs.children.length) { el.dialogs.querySelector('.dialog [data-v="0"]')?.click() || el.dialogs.querySelector('.dialog-backdrop')?.click(); return; }
+  if (!el.setup.hidden) return;
+  if (!el.control.hidden) return closeControl();
+  if (!el.search.hidden) return closeSearch();
+  if (inRecents) return exitRecents();
+  if (current) {
+    const rec = running.get(current);
+    const token = Math.random();
+    let answered = false;
+    const onReply = e => {
+      if (e.source !== rec.iframe.contentWindow || e.data?.type !== 'allo:back-result' || e.data.id !== token) return;
+      answered = true;
+      removeEventListener('message', onReply);
+      if (!e.data.handled && current === rec.id) goHome();
+    };
+    addEventListener('message', onReply);
+    try { rec.iframe.contentWindow.postMessage({ type: 'allo:back', id: token }, '*'); } catch {}
+    setTimeout(() => { if (!answered) { removeEventListener('message', onReply); if (current === rec.id) goHome(); } }, 250);
+    return;
+  }
+  if (editing) return exitEdit();
+}
+
+// Home button / gesture. When allo was already showing, go back to the first page.
+function pressHome(wasForeground = true) {
+  if (el.dialogs.children.length) el.dialogs.querySelector('.dialog-backdrop')?.click();
+  closeControl(); closeSearch(true);
+  if (inRecents) exitRecents();
+  if (current) { goHome(); return; }
+  if (editing) { exitEdit(); return; }
+  if (wasForeground && pageIndex !== 0) goPage(0);
+}
+
+/* =========================================================================
    Boot
    ========================================================================= */
 async function boot() {
@@ -1395,13 +1534,17 @@ async function boot() {
   try { list = await (await fetch('apps/catalog.json', { cache: 'no-cache' })).json(); }
   catch { try { list = await (await fetch('apps/catalog.json')).json(); } catch { list = []; } }
   for (const a of list) {
+    if (NATIVE && a.id === 'settings') a.name = 'Customize';
     catalog.set(a.id, { ...a, entry: new URL(a.entry, BASE).href, icon: new URL(a.icon, BASE).href, files: (a.files || []).map(f => new URL(f, BASE).href) });
   }
 
+  loadNativeApps();
   if (!state.installed.length) {
-    const pre = list.filter(a => a.preinstalled).map(a => a.id);
-    state.installed = pre;
-    state.dock = list.filter(a => a.dock).map(a => a.id).slice(0, DOCK_MAX);
+    // On a phone, allo's own versions of Camera, Clock etc. are optional (in the App Store).
+    const pre = NATIVE ? ['settings', 'store', 'weather', 'notes'] : list.filter(a => a.preinstalled).map(a => a.id);
+    state.installed = [...pre];
+    state.dock = NATIVE ? nativeDefaultDock() : list.filter(a => a.dock).map(a => a.id).slice(0, DOCK_MAX);
+    for (const id of state.dock) if (!state.installed.includes(id)) state.installed.push(id);
     state.home = pre.filter(id => !state.dock.includes(id));
     save();
     // cache preinstalled apps for offline use
@@ -1410,6 +1553,7 @@ async function boot() {
     }
   }
   // drop anything that no longer exists, make sure system apps stay installed
+  syncNativeApps();
   state.installed = state.installed.filter(id => getApp(id));
   for (const a of list) if (a.system && !isInstalled(a.id)) state.installed.push(a.id);
   const placed = new Set([...state.home, ...state.dock]);
@@ -1419,12 +1563,12 @@ async function boot() {
 
   renderHome();
 
-  if (state.setup) { lock(); }
-  else { locked = false; el.device.classList.remove('locked'); runSetup(); }
+  if (state.setup && !NATIVE) { lock(); }
+  else { locked = false; el.device.classList.remove('locked'); if (!state.setup) runSetup(); }
   updateChrome();
   requestAnimationFrame(() => document.body.classList.add('ready'));
 
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  if (!NATIVE && 'serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW registration failed', e));
   }
 }
@@ -1432,7 +1576,23 @@ async function boot() {
 boot();
 
 // for debugging from the console
-window.alloOS = { state: () => state, launch, goHome, lock, unlock, installApp, uninstallApp, installFromUrl, enterRecents };
+window.alloOS = {
+  state: () => state, launch, goHome, lock, unlock, installApp, uninstallApp, installFromUrl, enterRecents,
+  back, home: pressHome,
+  // called by the Android launcher
+  nativeAppsChanged() { syncNativeApps(); save(); renderHome({ flip: true }); if (!el.search.hidden) renderSearch(); },
+  nativeResume() {
+    nativeWallLight = nativeCall(() => NATIVE.wallpaperLight(), nativeWallLight);
+    applyWallpaper();
+    window.alloOS.nativeAppsChanged();
+    if (current) { const r = running.get(current); if (r) notifyVisibility(r, true); }
+    setupRefresh();
+  },
+  nativePause() { if (current) { const r = running.get(current); if (r) notifyVisibility(r, false); } if (editing) exitEdit(); },
+  nativeThemeChanged(dark) { nativeDark = !!dark; applyTheme(); },
+  nativeWallpaperChanged() { nativeWallLight = nativeCall(() => NATIVE.wallpaperLight(), false); applyWallpaper(); },
+  insetsChanged() { relayout(); for (const r of running.values()) sendEnv(r); }
+};
 
 // Never let the browser scroll system containers (e.g. when an off-screen app takes focus).
 for (const c of [el.device, el.windows, el.home, document.scrollingElement]) {

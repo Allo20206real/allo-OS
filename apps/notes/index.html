@@ -91,6 +91,7 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   if (e.target.id === 'q') { q = e.target.value; const pos = e.target.selectionStart; list(); const f = $('#q'); f.focus(); f.setSelectionRange(pos, pos); }
 });
+allo.on('back', () => { const b = document.getElementById('back'); if (b) { b.click(); return true; } });
 list();
 </script>
 </body>

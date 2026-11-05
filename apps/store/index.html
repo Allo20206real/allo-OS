@@ -61,7 +61,7 @@ const progress = {};
 function allApps() {
   const byId = new Map(S.catalog.map(a => [a.id, a]));
   for (const a of S.installed) if (!byId.has(a.id)) byId.set(a.id, a);
-  return [...byId.values()].filter(a => !a.system);
+  return [...byId.values()].filter(a => !a.system && !a.native);
 }
 const isInst = id => S.installed.some(a => a.id === id);
 
@@ -83,6 +83,8 @@ const tabs = {
     const cats = ['All', ...new Set(apps.map(a => a.category))];
     const shown = apps.filter(a => cat === 'All' || a.category === cat);
     return `<div class="titlebar"><h1>Discover</h1></div>
+      ${S.native ? `<div class="card" style="margin-bottom:14px"><div class="app-row" data-play=""><img src="play.svg" alt=""><div class="grow"><div class="t">Android apps</div><div class="s">Get WhatsApp, YouTube, games and more from Google Play. They appear on your home screen.</div></div><button class="get" data-play="">OPEN</button></div></div>
+      <div class="section-title" style="margin-top:4px">allo apps</div>` : ''}
       ${feat ? `<div class="feature" data-detail="${esc(feat.id)}" style="background:linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #000))">
         <img src="${esc(feat.icon)}" alt="">
         <div class="kicker">${isInst(feat.id) ? 'On your phone' : 'Featured app'}</div><h2>${esc(feat.name)}</h2><p>${esc(feat.description)}</p></div>` : ''}
@@ -95,7 +97,8 @@ const tabs = {
     const res = allApps().filter(a => !q || (a.name + ' ' + a.description + ' ' + a.category).toLowerCase().includes(q));
     return `<div class="titlebar"><h1>Search</h1></div>
       <div class="pad"><input class="field" id="q" type="search" placeholder="Apps, categories…" value="${esc(query)}" autocomplete="off"></div>
-      <div class="card" style="margin-top:14px" id="results">${res.map(row).join('') || '<div class="empty"><b>No results</b>Try another word.</div>'}</div>`;
+      <div class="card" style="margin-top:14px" id="results">${res.map(row).join('') || '<div class="empty"><b>No results</b>Try another word.</div>'}</div>
+      ${S.native && q ? `<div class="pad" style="margin-top:14px"><button class="btn block" data-play="${esc(query.trim())}">Search Google Play for “${esc(query.trim())}”</button></div>` : ''}`;
   },
   add() {
     return `<div class="titlebar"><h1>Add from link</h1></div>
@@ -161,13 +164,14 @@ async function get(id) {
 }
 
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-tab],[data-get],[data-open],[data-detail],[data-cat],#add-btn');
+  const t = e.target.closest('[data-tab],[data-get],[data-open],[data-detail],[data-cat],[data-play],#add-btn');
   if (!t) return;
   const d = t.dataset;
   if (d.tab) { tab = d.tab; $('#main').scrollTop = 0; render(); if (tab === 'search') setTimeout(() => $('#q')?.focus(), 50); }
   else if (d.get) { e.stopPropagation(); get(d.get); }
   else if (d.open) { e.stopPropagation(); allo.open(d.open); }
   else if (d.cat) { cat = d.cat; render(); }
+  else if (d.play !== undefined) allo.call('openPlay', d.play);
   else if (d.detail) detail(d.detail);
   else if (t.id === 'add-btn') addFromUrl();
 });

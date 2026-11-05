@@ -371,3 +371,18 @@ html.ios-standalone #homebar { bottom: 6px; }
   .lock-time { font-size: 80px; }
 }
 #device.setup #home { opacity: 0; }
+
+/* ---------- Running as the Android home screen ---------- */
+html.native { --status-h: calc(var(--sat) + 2px); --bar-h: var(--sab); }
+html.native, html.native body, html.native #device { background: transparent; }
+html.native #statusbar, html.native #homebar { visibility: hidden; pointer-events: none; }
+html.native #lock, html.native #cc-lock, html.native #cc-full { display: none; }
+html.native #dock { margin-bottom: calc(var(--bar-h) + 10px); }
+html.native #device.app-open #wallpaper, html.native #device.recents #wallpaper { filter: none; transform: none; }
+html.native #device.app-open #home { opacity: 0; }
+.play-search {
+  grid-column: 1 / -1; justify-self: center; margin-top: 18px; height: 42px; padding: 0 18px; border-radius: 21px;
+  display: inline-flex; align-items: center; gap: 8px; color: #fff; font-weight: 600; font-size: 14.5px;
+  background: rgba(255, 255, 255, .2); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.play-search svg { width: 18px; height: 18px; }

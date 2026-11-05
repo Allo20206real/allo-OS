@@ -6,7 +6,7 @@
 
   { "id": "store", "name": "App Store", "version": "1.0", "developer": "allo", "category": "System",
     "description": "Discover and install apps for allo OS.",
-    "entry": "apps/store/index.html", "icon": "apps/store/icon.svg", "files": [],
+    "entry": "apps/store/index.html", "icon": "apps/store/icon.svg", "files": ["apps/store/play.svg"],
     "system": true, "preinstalled": true, "dock": true },
 
   { "id": "notes", "name": "Notes", "version": "1.0", "developer": "allo", "category": "Productivity",

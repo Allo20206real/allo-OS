@@ -51,25 +51,30 @@ const stack = ['main'];
 
 const views = {
   main() {
-    const install = S.standalone ? '' : `
+    const install = S.native ? (S.isDefaultHome ? '' : `
+      <div class="hero" style="margin-bottom:22px">
+        <img src="../../icons/icon.svg" alt="">
+        <div class="grow"><b>Make allo your home screen</b><span>Open allo every time you press Home</span></div>
+        <button class="btn small" style="background:#fff;color:#111" data-act="sethome">Set</button>
+      </div>`) : S.standalone ? '' : `
       <div class="hero" style="margin-bottom:22px">
         <img src="../../icons/icon.svg" alt="">
         <div class="grow"><b>Install allo OS</b><span>${S.platform === 'ios' ? 'Share › Add to Home Screen' : 'Run full screen and offline'}</span></div>
         ${S.canPromptInstall ? '<button class="btn small" style="background:#fff;color:#111" data-act="install">Install</button>' : `<button class="btn small" style="background:rgba(255,255,255,.25);color:#fff" data-go="install">How</button>`}
       </div>`;
     return `
-      <div class="titlebar"><h1>Settings</h1></div>
+      <div class="titlebar"><h1>${S.native ? 'Customize' : 'Settings'}</h1></div>
       ${install}
       <div class="group">
         <button class="item has-icon" data-go="wallpaper">${ico('<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>', '#ff6b8b')}<div class="body"><div class="t">Wallpaper & style</div></div>${chev}</button>
         <div class="item has-icon">${ico('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', '#5856d6')}<div class="body"><div class="t">Appearance</div></div>
           <div class="seg" style="width:170px">${['light', 'dark', 'auto'].map(t => `<button data-theme="${t}" class="${S.settings.theme === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
       </div>
-      <div class="section-title">Display & lock</div>
+      <div class="section-title">${S.native ? 'Display' : 'Display &amp; lock'}</div>
       <div class="group">
         <label class="item has-icon">${ico('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', '#ff9500')}<div class="body"><div class="t">24-hour time</div></div><input type="checkbox" class="switch" data-set="clock24" ${S.settings.clock24 ? 'checked' : ''}></label>
-        <label class="item has-icon">${ico('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', '#34c759')}<div class="body"><div class="t">Auto-lock</div><div class="s">Lock after a minute away</div></div><input type="checkbox" class="switch" data-set="autoLock" ${S.settings.autoLock ? 'checked' : ''}></label>
-        <button class="item has-icon" data-act="lock">${ico('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>', '#8e8e93')}<div class="body"><div class="t">Lock now</div></div></button>
+        ${S.native ? '' : `<label class="item has-icon">${ico('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', '#34c759')}<div class="body"><div class="t">Auto-lock</div><div class="s">Lock after a minute away</div></div><input type="checkbox" class="switch" data-set="autoLock" ${S.settings.autoLock ? 'checked' : ''}></label>
+        <button class="item has-icon" data-act="lock">${ico('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>', '#8e8e93')}<div class="body"><div class="t">Lock now</div></div></button>`}
       </div>
       <div class="section-title">Apps</div>
       <div class="group">
@@ -78,6 +83,8 @@ const views = {
       </div>
       <div class="section-title">System</div>
       <div class="group">
+        ${S.native ? `<button class="item has-icon" data-act="phone">${ico('<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>', '#34c759')}<div class="body"><div class="t">Phone settings</div><div class="s">Wi-Fi, Bluetooth, display, sound…</div></div>${chev}</button>
+        <button class="item has-icon" data-act="sethome">${ico('<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', '#ff9500')}<div class="body"><div class="t">Default home app</div></div><span class="v">${S.isDefaultHome ? 'allo' : 'Other'}</span>${chev}</button>` : ''}
         <button class="item has-icon" data-go="gestures">${ico('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5v-2a1.5 1.5 0 0 1 3 0V12M14 10.5a1.5 1.5 0 0 1 3 0V12M17 11.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 15a1.5 1.5 0 0 1 2.4-1.8L8 15"/>', '#00b5c8')}<div class="body"><div class="t">Gestures</div></div>${chev}</button>
         <button class="item has-icon" data-go="storage">${ico('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>', '#636366')}<div class="body"><div class="t">Storage</div></div>${chev}</button>
         <button class="item has-icon" data-go="about">${ico('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', '#8e8e93')}<div class="body"><div class="t">About</div></div>${chev}</button>
@@ -118,12 +125,13 @@ const views = {
       <div class="group">
         <div class="item"><div class="body"><div class="t">Version</div></div><span class="v">${esc(a.version || '1.0')}</span></div>
         <div class="item"><div class="body"><div class="t">Category</div></div><span class="v">${esc(a.category || '—')}</span></div>
-        <div class="item"><div class="body"><div class="t">Type</div></div><span class="v">${a.system ? 'System' : a.external ? (a.webclip ? 'Web app' : 'Third-party') : 'allo'}</span></div>
+        <div class="item"><div class="body"><div class="t">Type</div></div><span class="v">${a.native ? 'Android app' : a.system ? 'System' : a.external ? (a.webclip ? 'Web app' : 'Third-party') : 'allo'}</span></div>
       </div>
       <p class="foot">${esc(a.description || '')}</p>
       <div class="group" style="margin-top:18px">
         <button class="item" data-open="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--accent)">Open</div></div></button>
-        ${a.system ? '' : `<button class="item" data-remove="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--danger)">Remove app</div></div></button>`}
+        ${a.native ? `<button class="item" data-info="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--accent)">App info</div></div></button>` : ''}
+        ${a.system || a.locked ? '' : `<button class="item" data-remove="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--danger)">${a.native ? 'Uninstall' : 'Remove app'}</div></div></button>`}
       </div>`;
   },
 
@@ -172,7 +180,7 @@ const views = {
       <div class="group">
         <div class="item"><div class="body"><div class="t">Version</div></div><span class="v">${esc(S.version)}</span></div>
         <div class="item"><div class="body"><div class="t">Device</div></div><span class="v">${S.platform === 'ios' ? 'iPhone / iPad' : S.platform === 'android' ? 'Android' : 'Computer'}</span></div>
-        <div class="item"><div class="body"><div class="t">Mode</div></div><span class="v">${S.standalone ? 'Installed' : 'Browser'}</span></div>
+        <div class="item"><div class="body"><div class="t">Mode</div></div><span class="v">${S.native ? 'Home screen (launcher ' + esc(S.nativeVersion) + ')' : S.standalone ? 'Installed' : 'Browser'}</span></div>
         <div class="item"><div class="body"><div class="t">Apps</div></div><span class="v">${S.installed.length}</span></div>
         <div class="item"><div class="body"><div class="t">Running</div></div><span class="v">${S.running.length}</span></div>
       </div>
@@ -226,6 +234,9 @@ document.addEventListener('click', async e => {
   else if (d.act === 'store') allo.open('store');
   else if (d.act === 'install') allo.call('promptInstall');
   else if (d.act === 'reset') allo.call('reset');
+  else if (d.act === 'sethome') allo.call('setDefaultHome');
+  else if (d.act === 'phone') allo.call('openPhoneSettings');
+  else if (d.info) allo.call('appInfo', d.info);
 });
 document.addEventListener('change', e => {
   const t = e.target;
@@ -233,6 +244,7 @@ document.addEventListener('change', e => {
 });
 
 allo.on('state', s => { S = s; render(); });
+allo.on('back', () => { if (stack.length > 1) { stack.pop(); render(); return true; } });
 allo.call('getState').then(s => { S = s; render(); }).catch(err => {
   $('#root').innerHTML = `<div class="app"><div class="empty"><b>Open in allo OS</b>${esc(err.message)}</div></div>`;
 });

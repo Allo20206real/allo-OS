@@ -80,7 +80,11 @@ function view(id) {
     if (b.dataset.a === 'close') v.remove();
     if (b.dataset.a === 'share') {
       const file = new File([p.blob], `allo-${p.id}.${p.blob.type.includes('png') ? 'png' : 'jpg'}`, { type: p.blob.type });
-      if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch {} }
+      if (allo.native) {
+        const url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(p.blob); });
+        if (!await allo.call('saveImage', url)) allo.notify('Couldn’t save', 'Saving photos needs Android 10 or newer.');
+      }
+      else if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch {} }
       else { const a = document.createElement('a'); a.href = p.url; a.download = file.name; a.click(); }
     }
     if (b.dataset.a === 'del') { await allo.photos.remove(p.id); v.remove(); load(); }
@@ -91,6 +95,7 @@ function view(id) {
 $('#list').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) view(b.dataset.id); });
 $('#imp').onchange = async e => { for (const f of e.target.files) await allo.photos.add(f, 'import'); e.target.value = ''; load(); };
 allo.on('show', load);
+allo.on('back', () => { const v = document.querySelector('.viewer'); if (v) { v.remove(); return true; } });
 load();
 </script>
 </body>
