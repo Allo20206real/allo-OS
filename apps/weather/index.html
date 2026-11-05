@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weather</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  html, body { background: #3d8fe6; color: #fff; overflow: hidden; }
+  body { transition: background .6s; }
+  .wx { position: absolute; inset: 0; overflow-y: auto; padding: var(--sat) 0 calc(var(--sab) + 30px); }
+  .top { display: flex; justify-content: flex-end; gap: 8px; padding: 6px 14px 0; }
+  .top button { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center; color: #fff; }
+  .now { text-align: center; padding: 18px 0 26px; }
+  .now .city { font-size: 30px; font-weight: 500; }
+  .now .temp { font-size: 96px; font-weight: 200; line-height: 1.05; margin-left: 24px; }
+  .now .cond { font-size: 18px; font-weight: 500; opacity: .92; }
+  .now .hl { font-size: 16px; opacity: .85; margin-top: 2px; }
+  .glass { margin: 0 16px 14px; border-radius: 22px; background: rgba(255,255,255,.16); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 12px 0; }
+  .glass h3 { margin: 0 16px 8px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; opacity: .75; }
+  .hours { display: flex; overflow-x: auto; scrollbar-width: none; padding: 0 8px; }
+  .hours::-webkit-scrollbar { display: none; }
+  .hour { flex: none; width: 58px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 14px; }
+  .hour .e { font-size: 22px; }
+  .day { display: grid; grid-template-columns: 70px 30px 38px 1fr 38px; gap: 8px; align-items: center; padding: 8px 16px; font-size: 16px; }
+  .day + .day { border-top: 1px solid rgba(255,255,255,.14); }
+  .day .lo { opacity: .65; text-align: right; }
+  .range { height: 5px; border-radius: 3px; background: rgba(255,255,255,.2); position: relative; }
+  .range i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #8fd3ff, #ffd36b, #ff9a5a); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 16px; }
+  .stat { border-radius: 20px; background: rgba(255,255,255,.16); padding: 14px; }
+  .stat span { font-size: 12.5px; opacity: .75; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .stat b { display: block; font-size: 26px; font-weight: 400; margin-top: 6px; }
+  .find { padding: 0 16px; }
+  .find .field { background: rgba(255,255,255,.2); color: #fff; }
+  .find .field::placeholder { color: rgba(255,255,255,.7); }
+  .res button { width: 100%; text-align: left; padding: 14px 4px; border-bottom: 1px solid rgba(255,255,255,.15); color: #fff; }
+  .res small { opacity: .7; }
+  .center { text-align: center; padding: 70px 30px; }
+  .loc { margin-top: 16px; background: #fff; color: #1a73e8; }
+</style>
+</head>
+<body>
+<div class="wx" id="wx"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+allo.statusBar('light');
+allo.on('env', () => allo.statusBar('light'));
+const CODES = {
+  0: ['Clear', '☀️', '🌙'], 1: ['Mostly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'], 3: ['Cloudy', '☁️', '☁️'],
+  45: ['Fog', '🌫️'], 48: ['Fog', '🌫️'], 51: ['Light drizzle', '🌦️'], 53: ['Drizzle', '🌦️'], 55: ['Drizzle', '🌧️'],
+  61: ['Light rain', '🌦️'], 63: ['Rain', '🌧️'], 65: ['Heavy rain', '🌧️'], 66: ['Freezing rain', '🌧️'], 67: ['Freezing rain', '🌧️'],
+  71: ['Light snow', '🌨️'], 73: ['Snow', '🌨️'], 75: ['Heavy snow', '❄️'], 77: ['Snow grains', '🌨️'],
+  80: ['Showers', '🌦️'], 81: ['Showers', '🌧️'], 82: ['Heavy showers', '⛈️'], 85: ['Snow showers', '🌨️'], 86: ['Snow showers', '❄️'],
+  95: ['Thunderstorm', '⛈️'], 96: ['Thunderstorm', '⛈️'], 99: ['Thunderstorm', '⛈️']
+};
+const info = (c, day = 1) => { const x = CODES[c] || ['—', '🌡️']; return { text: x[0], emoji: !day && x[2] ? x[2] : x[1] }; };
+let place = allo.store.get('place', null);
+let data = allo.store.get('data', null);
+let unit = allo.store.get('unit', 'C');
+
+function bg(code, day) {
+  const g = !day ? 'linear-gradient(180deg,#1b2440,#2c3a66)'
+    : code <= 1 ? 'linear-gradient(180deg,#3b8de8,#7cc1f5)'
+    : code <= 3 ? 'linear-gradient(180deg,#5d7fa8,#9ab4cf)'
+    : code >= 95 ? 'linear-gradient(180deg,#3a3f5a,#646a85)'
+    : code >= 71 && code <= 86 && ![80, 81, 82].includes(code) ? 'linear-gradient(180deg,#7d93b0,#c3d0e0)'
+    : 'linear-gradient(180deg,#4a6a8c,#7f98b2)';
+  document.body.style.background = g;
+}
+
+async function fetchWx() {
+  if (!place) return;
+  const u = `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day,precipitation&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=7${unit === 'F' ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : ''}`;
+  try {
+    const r = await fetch(u);
+    if (!r.ok) throw new Error();
+    data = await r.json(); data.unit = unit; data.at = Date.now();
+    allo.store.set('data', data);
+  } catch { if (!data) { $('#wx').innerHTML = `<div class="center"><b style="font-size:20px">Can’t load weather</b><p>Check your internet connection.</p><button class="btn" onclick="fetchWx()">Try again</button></div>`; return; } }
+  render();
+}
+
+function render() {
+  if (!place) return search();
+  if (!data) { $('#wx').innerHTML = `<div class="center">Loading…</div>`; return; }
+  const c = data.current, d = data.daily, h = data.hourly;
+  const now = info(c.weather_code, c.is_day);
+  bg(c.weather_code, c.is_day);
+  const startIdx = Math.max(0, h.time.findIndex(t => new Date(t) >= new Date(Date.now() - 3600e3)));
+  const hours = h.time.slice(startIdx, startIdx + 24).map((t, i) => {
+    const k = startIdx + i;
+    return `<div class="hour"><span>${i === 0 ? 'Now' : new Date(t).toLocaleTimeString([], { hour: 'numeric' })}</span><span class="e">${info(h.weather_code[k], h.is_day[k]).emoji}</span><b>${Math.round(h.temperature_2m[k])}°</b></div>`;
+  }).join('');
+  const lo = Math.min(...d.temperature_2m_min), hi = Math.max(...d.temperature_2m_max);
+  const days = d.time.map((t, i) => {
+    const a = (d.temperature_2m_min[i] - lo) / (hi - lo || 1) * 100, b = (d.temperature_2m_max[i] - lo) / (hi - lo || 1) * 100;
+    return `<div class="day"><span>${i === 0 ? 'Today' : new Date(t + 'T12:00').toLocaleDateString([], { weekday: 'short' })}</span><span>${info(d.weather_code[i]).emoji}</span><span class="lo">${Math.round(d.temperature_2m_min[i])}°</span><div class="range"><i style="left:${a}%;right:${100 - b}%"></i></div><span style="text-align:right">${Math.round(d.temperature_2m_max[i])}°</span></div>`;
+  }).join('');
+  const tm = s => new Date(s).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  $('#wx').innerHTML = `
+    <div class="top"><button id="unit" aria-label="Units" style="font-weight:700">°${unit === 'C' ? 'F' : 'C'}</button><button id="find" aria-label="Change city"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button></div>
+    <div class="now"><div class="city">${esc(place.name)}</div><div class="temp">${Math.round(c.temperature_2m)}°</div><div class="cond">${now.text}</div><div class="hl">H:${Math.round(d.temperature_2m_max[0])}°  L:${Math.round(d.temperature_2m_min[0])}°</div></div>
+    <div class="glass"><h3>Next 24 hours</h3><div class="hours">${hours}</div></div>
+    <div class="glass"><h3>7-day forecast</h3>${days}</div>
+    <div class="stats">
+      <div class="stat"><span>Feels like</span><b>${Math.round(c.apparent_temperature)}°</b></div>
+      <div class="stat"><span>Humidity</span><b>${c.relative_humidity_2m}%</b></div>
+      <div class="stat"><span>Wind</span><b>${Math.round(c.wind_speed_10m)} ${unit === 'F' ? 'mph' : 'km/h'}</b></div>
+      <div class="stat"><span>UV index</span><b>${Math.round(d.uv_index_max[0] ?? 0)}</b></div>
+      <div class="stat"><span>Sunrise</span><b>${tm(d.sunrise[0])}</b></div>
+      <div class="stat"><span>Sunset</span><b>${tm(d.sunset[0])}</b></div>
+    </div>
+    <p style="text-align:center;font-size:12px;opacity:.6;margin-top:18px">Updated ${new Date(data.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · Open-Meteo</p>`;
+  $('#find').onclick = search;
+  $('#unit').onclick = () => { unit = unit === 'C' ? 'F' : 'C'; allo.store.set('unit', unit); fetchWx(); };
+}
+
+function search() {
+  document.body.style.background = 'linear-gradient(180deg,#3b8de8,#6fb5ef)';
+  $('#wx').innerHTML = `<div class="titlebar"><h1>Weather</h1>${place ? '<button class="btn small" id="cancel" style="background:rgba(255,255,255,.2);color:#fff">Cancel</button>' : ''}</div>
+    <div class="find"><input class="field" id="q" placeholder="Search for a city" autocomplete="off">
+    <button class="btn block loc" id="here"><svg class="i" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>Use my location</button>
+    <div class="res" id="res"></div></div>`;
+  $('#cancel') && ($('#cancel').onclick = render);
+  let t;
+  $('#q').oninput = e => {
+    clearTimeout(t);
+    const q = e.target.value.trim();
+    if (q.length < 2) { $('#res').innerHTML = ''; return; }
+    t = setTimeout(async () => {
+      try {
+        const r = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`)).json();
+        $('#res').innerHTML = (r.results || []).map(p => `<button data-p='${esc(JSON.stringify({ name: p.name, lat: p.latitude, lon: p.longitude }))}'>${esc(p.name)}<br><small>${esc([p.admin1, p.country].filter(Boolean).join(', '))}</small></button>`).join('') || '<p style="opacity:.8">No cities found.</p>';
+      } catch { $('#res').innerHTML = '<p style="opacity:.8">You seem to be offline.</p>'; }
+    }, 300);
+  };
+  $('#here').onclick = () => {
+    if (!navigator.geolocation) return;
+    $('#here').textContent = 'Locating…';
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      choose({ name: 'My location', lat, lon });
+    }, () => { $('#here').textContent = 'Location not available'; }, { timeout: 10000 });
+  };
+  $('#res').onclick = e => { const b = e.target.closest('[data-p]'); if (b) choose(JSON.parse(b.dataset.p)); };
+  setTimeout(() => $('#q').focus(), 100);
+}
+function choose(p) { place = p; data = null; allo.store.set('place', p); render(); fetchWx(); }
+
+render();
+if (place && (!data || Date.now() - data.at > 10 * 60e3 || data.unit !== unit)) fetchWx();
+allo.on('show', () => { if (place && data && Date.now() - data.at > 10 * 60e3) fetchWx(); });
+</script>
+</body>
+</html>

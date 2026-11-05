@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>App Store</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .feature { margin: 0 16px 8px; border-radius: 26px; padding: 22px; color: #fff; position: relative; overflow: hidden; min-height: 210px;
+    display: flex; flex-direction: column; justify-content: flex-end; cursor: pointer; }
+  .feature .kicker { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+  .feature h2 { margin: 4px 0 4px; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; }
+  .feature p { margin: 0; font-size: 14.5px; opacity: .9; max-width: 260px; }
+  .feature img { position: absolute; right: -18px; top: -18px; width: 150px; height: 150px; border-radius: 27%; transform: rotate(12deg); opacity: .95; box-shadow: 0 20px 40px rgba(0,0,0,.25); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 6px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips button { flex: none; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--fill); font-size: 14px; font-weight: 600; color: var(--fg2); }
+  .chips button.on { background: var(--fg); color: var(--bg); }
+  .app-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; position: relative; cursor: pointer; }
+  .app-row + .app-row::before { content: ""; position: absolute; top: 0; left: 90px; right: 16px; height: 1px; background: var(--hair); }
+  .app-row img { width: 62px; height: 62px; border-radius: 27%; flex: none; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .app-row .t { font-weight: 600; font-size: 16.5px; }
+  .app-row .s { font-size: 13.5px; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .get { min-width: 76px; height: 32px; border-radius: 16px; font-weight: 700; font-size: 14px; background: var(--fill); color: var(--accent); flex: none; position: relative; }
+  .get.open { background: var(--fill); color: var(--fg); }
+  .get.busy { background: none; min-width: 76px; }
+  .get.busy::after { content: ""; position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--fill2) 0); -webkit-mask: radial-gradient(circle, transparent 9px, #000 9.5px); mask: radial-gradient(circle, transparent 9px, #000 9.5px); }
+  .get.busy span { visibility: hidden; }
+  .card { background: var(--card); border-radius: 22px; margin: 0 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .detail-head { display: flex; gap: 16px; align-items: center; }
+  .detail-head img { width: 96px; height: 96px; border-radius: 27%; box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  .detail-head h2 { margin: 0 0 2px; font-size: 22px; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; margin: 20px 0; padding: 12px 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+  .facts b { display: block; font-size: 16px; }
+  .facts span { font-size: 12px; color: var(--fg2); }
+  .facts div + div { border-left: 1px solid var(--hair); }
+  .msg { font-size: 14px; margin-top: 10px; min-height: 20px; }
+  .msg.err { color: var(--danger); }
+  .msg.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="scroll" id="main"></div>
+  <nav class="tabbar">
+    <button data-tab="discover" class="on"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Discover</button>
+    <button data-tab="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</button>
+    <button data-tab="add"><svg class="i" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Add from link</button>
+  </nav>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let S = null, tab = 'discover', cat = 'All', query = '';
+const progress = {};
+
+function allApps() {
+  const byId = new Map(S.catalog.map(a => [a.id, a]));
+  for (const a of S.installed) if (!byId.has(a.id)) byId.set(a.id, a);
+  return [...byId.values()].filter(a => !a.system);
+}
+const isInst = id => S.installed.some(a => a.id === id);
+
+function button(a) {
+  const p = progress[a.id] ?? S.installing[a.id];
+  if (p != null && !isInst(a.id)) return `<button class="get busy" data-id="${esc(a.id)}" style="--p:${p}"><span>GET</span></button>`;
+  if (isInst(a.id)) return `<button class="get open" data-open="${esc(a.id)}">OPEN</button>`;
+  return `<button class="get" data-get="${esc(a.id)}">GET</button>`;
+}
+function row(a) {
+  return `<div class="app-row" data-detail="${esc(a.id)}"><img src="${esc(a.icon)}" alt=""><div class="grow" style="min-width:0"><div class="t">${esc(a.name)}</div><div class="s">${esc(a.description)}</div></div>${button(a)}</div>`;
+}
+
+const tabs = {
+  discover() {
+    const apps = allApps();
+    const notInstalled = apps.filter(a => !isInst(a.id) && !a.external);
+    const feat = notInstalled[0] || apps.find(a => !a.external) || apps[0];
+    const cats = ['All', ...new Set(apps.map(a => a.category))];
+    const shown = apps.filter(a => cat === 'All' || a.category === cat);
+    return `<div class="titlebar"><h1>Discover</h1></div>
+      ${feat ? `<div class="feature" data-detail="${esc(feat.id)}" style="background:linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #000))">
+        <img src="${esc(feat.icon)}" alt="">
+        <div class="kicker">${isInst(feat.id) ? 'On your phone' : 'Featured app'}</div><h2>${esc(feat.name)}</h2><p>${esc(feat.description)}</p></div>` : ''}
+      <div class="section-title">Apps</div>
+      <div class="chips">${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}</button>`).join('')}</div>
+      <div class="card" style="margin-top:10px">${shown.map(row).join('') || '<div class="empty">Nothing here yet</div>'}</div>`;
+  },
+  search() {
+    const q = query.trim().toLowerCase();
+    const res = allApps().filter(a => !q || (a.name + ' ' + a.description + ' ' + a.category).toLowerCase().includes(q));
+    return `<div class="titlebar"><h1>Search</h1></div>
+      <div class="pad"><input class="field" id="q" type="search" placeholder="Apps, categories…" value="${esc(query)}" autocomplete="off"></div>
+      <div class="card" style="margin-top:14px" id="results">${res.map(row).join('') || '<div class="empty"><b>No results</b>Try another word.</div>'}</div>`;
+  },
+  add() {
+    return `<div class="titlebar"><h1>Add from link</h1></div>
+      <div class="card" style="padding:18px">
+        <div style="font-weight:600;margin-bottom:4px">Install any app</div>
+        <div class="muted" style="font-size:14px;margin-bottom:14px">Paste a link to an allo app manifest (a <code>.json</code> file), or any website to add it to your home screen as a web app.</div>
+        <input class="field" id="url" type="url" inputmode="url" placeholder="https://example.com/app.json" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="btn primary block" id="add-btn" style="margin-top:12px">Install</button>
+        <div class="msg" id="msg"></div>
+      </div>
+      <div class="section-title">For developers</div>
+      <div class="card" style="padding:16px;font-size:14px;line-height:1.5">
+        <div class="muted">An allo app is a web page plus a small manifest:</div>
+        <pre style="background:var(--fill);padding:12px;border-radius:12px;overflow-x:auto;font-size:12.5px;margin:10px 0 6px;user-select:text">{
+  "name": "My App",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "description": "What it does",
+  "files": ["app.js", "style.css"]
+}</pre>
+        <div class="muted">Include <code>sdk/allo.js</code> to match the system theme and send notifications. Listed files are downloaded so the app works offline.</div>
+      </div>`;
+  }
+};
+
+function render() {
+  if (!S) return;
+  const main = $('#main');
+  const st = main.scrollTop;
+  const focus = document.activeElement?.id;
+  const sel = document.activeElement?.selectionStart;
+  const urlVal = $('#url')?.value;
+  main.innerHTML = tabs[tab]();
+  main.scrollTop = st;
+  if (urlVal) $('#url').value = urlVal;
+  if (focus && $('#' + focus)) { const f = $('#' + focus); f.focus(); try { f.setSelectionRange(sel, sel); } catch {} }
+  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+}
+
+function detail(id) {
+  const a = allApps().find(x => x.id === id);
+  if (!a) return;
+  const sh = allo.sheet(`<div class="detail-head"><img src="${esc(a.icon)}" alt=""><div class="grow"><h2>${esc(a.name)}</h2><div class="muted" style="font-size:14px">${esc(a.developer || 'allo')}</div><div style="margin-top:10px" class="btn-slot">${button(a)}</div></div></div>
+    <div class="facts"><div><b>${esc(a.category || '—')}</b><span>Category</span></div><div><b>${esc(a.version || '1.0')}</b><span>Version</span></div><div><b>Free</b><span>Price</span></div></div>
+    <div style="font-size:15.5px;line-height:1.5">${esc(a.description)}</div>
+    <div class="muted" style="font-size:13px;margin-top:14px">Works offline after install · No account needed</div>`, { onClose: () => { openSheet = null; } });
+  openSheet = { el: sh, id };
+}
+let openSheet = null;
+function refreshSheet() {
+  if (!openSheet) return;
+  const a = allApps().find(x => x.id === openSheet.id);
+  const slot = openSheet.el.querySelector('.btn-slot');
+  if (a && slot) slot.innerHTML = button(a);
+}
+
+async function get(id) {
+  progress[id] = 0;
+  render(); refreshSheet();
+  try { await allo.call('install', id); }
+  catch (e) { allo.notify('Install failed', e.message); }
+  delete progress[id];
+}
+
+document.addEventListener('click', async e => {
+  const t = e.target.closest('[data-tab],[data-get],[data-open],[data-detail],[data-cat],#add-btn');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.tab) { tab = d.tab; $('#main').scrollTop = 0; render(); if (tab === 'search') setTimeout(() => $('#q')?.focus(), 50); }
+  else if (d.get) { e.stopPropagation(); get(d.get); }
+  else if (d.open) { e.stopPropagation(); allo.open(d.open); }
+  else if (d.cat) { cat = d.cat; render(); }
+  else if (d.detail) detail(d.detail);
+  else if (t.id === 'add-btn') addFromUrl();
+});
+document.addEventListener('input', e => { if (e.target.id === 'q') { query = e.target.value; render(); } });
+document.addEventListener('keydown', e => { if (e.target.id === 'url' && e.key === 'Enter') addFromUrl(); });
+
+async function addFromUrl() {
+  const url = $('#url').value.trim();
+  const msg = $('#msg'), btn = $('#add-btn');
+  if (!url) { msg.className = 'msg err'; msg.textContent = 'Enter a link first.'; return; }
+  btn.disabled = true; btn.textContent = 'Installing…'; msg.textContent = '';
+  try {
+    const r = await allo.call('installFromUrl', url);
+    msg.className = 'msg ok'; msg.textContent = `${r.name} was added to your home screen.`;
+    $('#url').value = '';
+  } catch (err) { msg.className = 'msg err'; msg.textContent = err.message; }
+  btn.disabled = false; btn.textContent = 'Install';
+}
+
+allo.on('state', s => { S = s; render(); refreshSheet(); });
+allo.on('install', ({ id, progress: p, done }) => {
+  if (done) delete progress[id]; else progress[id] = p;
+  document.querySelectorAll(`.get[data-id="${CSS.escape(id)}"]`).forEach(b => b.style.setProperty('--p', p));
+});
+allo.call('getState').then(s => { S = s; render(); }).catch(err => {
+  $('#main').innerHTML = `<div class="empty"><b>Open in allo OS</b>${esc(err.message)}</div>`;
+});
+</script>
+</body>
+</html>

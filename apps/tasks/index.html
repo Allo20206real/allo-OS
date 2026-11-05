@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tasks</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  :root { --t: #18b062; }
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 16px 6px; }
+  .sum { background: var(--card); border-radius: 18px; padding: 14px; box-shadow: var(--shadow); text-align: left; }
+  .sum b { font-size: 28px; font-weight: 700; display: block; }
+  .sum span { font-size: 14px; color: var(--fg2); font-weight: 600; }
+  .sum.on { outline: 2px solid var(--t); }
+  .task { display: flex; align-items: center; gap: 14px; padding: 12px 16px; position: relative; }
+  .task + .task::before { content: ""; position: absolute; top: 0; left: 56px; right: 0; height: 1px; background: var(--hair); }
+  .chk { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--fg3); display: grid; place-items: center; flex: none; transition: all .2s; }
+  .chk svg { width: 15px; height: 15px; stroke-width: 3; color: #fff; opacity: 0; }
+  .task.done .chk { background: var(--t); border-color: var(--t); }
+  .task.done .chk svg { opacity: 1; }
+  .task.done .tt { color: var(--fg3); text-decoration: line-through; }
+  .tt { flex: 1; font-size: 16.5px; word-break: break-word; }
+  .del { color: var(--fg3); opacity: .7; }
+  .newrow { display: flex; gap: 10px; padding: 12px 16px calc(var(--sab) + 12px); background: var(--bg); border-top: 1px solid var(--hair); }
+  .newrow .btn { background: var(--t); color: #fff; }
+  .clear { color: var(--t); font-weight: 600; font-size: 14px; padding: 8px 20px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><h1>Tasks</h1></div>
+  <div class="scroll" id="list" style="padding-bottom:16px"></div>
+  <form class="newrow" id="form"><input class="field" id="new" placeholder="Add a task" autocomplete="off"><button class="btn" type="submit">Add</button></form>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let tasks = allo.store.get('tasks', [{ id: 'a', text: 'Try installing an app from the App Store', done: false }, { id: 'b', text: 'Change the wallpaper in Settings', done: false }]);
+let filter = 'open';
+const save = () => allo.store.set('tasks', tasks);
+function render() {
+  const open = tasks.filter(t => !t.done), done = tasks.filter(t => t.done);
+  const shown = filter === 'open' ? open : done;
+  $('#list').innerHTML = `<div class="summary">
+      <button class="sum ${filter === 'open' ? 'on' : ''}" data-f="open"><b>${open.length}</b><span>To do</span></button>
+      <button class="sum ${filter === 'done' ? 'on' : ''}" data-f="done"><b>${done.length}</b><span>Completed</span></button></div>
+    <div class="group" style="margin-top:12px">${shown.map(t => `<div class="task ${t.done ? 'done' : ''}" data-id="${t.id}"><button class="chk" aria-label="Toggle"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></button><div class="tt">${esc(t.text)}</div><button class="del" aria-label="Delete"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')
+      || `<div class="empty" style="padding:40px 20px">${filter === 'open' ? '<b>All done</b>Nothing left to do.' : 'No completed tasks yet.'}</div>`}</div>
+    ${filter === 'done' && done.length ? '<button class="clear" id="clear">Clear completed</button>' : ''}`;
+}
+$('#list').addEventListener('click', e => {
+  const f = e.target.closest('[data-f]');
+  if (f) { filter = f.dataset.f; render(); return; }
+  if (e.target.closest('#clear')) { tasks = tasks.filter(t => !t.done); save(); render(); return; }
+  const row = e.target.closest('.task');
+  if (!row) return;
+  const t = tasks.find(x => x.id === row.dataset.id);
+  if (e.target.closest('.del')) tasks = tasks.filter(x => x !== t);
+  else if (e.target.closest('.chk')) { t.done = !t.done; allo.haptic(8); if (t.done) { row.classList.add('done'); save(); setTimeout(render, 350); return; } }
+  save(); render();
+});
+$('#form').onsubmit = e => {
+  e.preventDefault();
+  const v = $('#new').value.trim();
+  if (!v) return;
+  tasks.unshift({ id: Date.now().toString(36), text: v, done: false });
+  $('#new').value = ''; filter = 'open'; save(); render();
+};
+render();
+</script>
+</body>
+</html>

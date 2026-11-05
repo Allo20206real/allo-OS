@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Settings</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  .view { position: absolute; inset: 0; overflow-y: auto; background: var(--bg); padding-top: var(--sat); padding-bottom: calc(var(--sab) + 30px); }
+  .view.enter { animation: push .35s cubic-bezier(.2, .9, .25, 1); }
+  @keyframes push { from { transform: translateX(30%); opacity: .4; } }
+  .hero { margin: 4px 16px 0; padding: 18px; border-radius: 22px; display: flex; gap: 16px; align-items: center; color: #fff;
+    background: linear-gradient(135deg, #6a6bff, #2fc5e0); }
+  .hero img { width: 58px; height: 58px; border-radius: 27%; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+  .hero b { font-size: 18px; display: block; }
+  .hero span { font-size: 14px; opacity: .9; }
+  .walls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 16px; }
+  .walls button { aspect-ratio: 9 / 17; border-radius: 16px; background-size: cover !important; background-position: center !important;
+    border: 3px solid transparent; outline: 1px solid var(--hair); position: relative; overflow: hidden; }
+  .walls button.on { border-color: var(--accent); }
+  .walls .add { display: grid; place-items: center; background: var(--fill); color: var(--fg2); font-size: 13px; font-weight: 600; }
+  .walls .add svg { width: 26px; height: 26px; margin-bottom: 4px; }
+  .walls .name { position: absolute; left: 0; right: 0; bottom: 6px; color: #fff; font-size: 12px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .walls .light .name { color: #111; text-shadow: none; }
+  .accents { display: flex; gap: 14px; padding: 14px 16px; flex-wrap: wrap; }
+  .accents button { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255,255,255,.4); transition: transform .15s; }
+  .accents button.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px currentColor; }
+  .preview { margin: 0 16px; padding: 16px; display: flex; justify-content: center; }
+  .app-ico { width: 34px; height: 34px; border-radius: 27%; flex: none; }
+  .big-app { display: flex; flex-direction: column; align-items: center; padding: 16px 0 22px; }
+  .big-app img { width: 92px; height: 92px; border-radius: 27%; box-shadow: 0 8px 26px rgba(0,0,0,.15); }
+  .big-app h2 { margin: 14px 0 2px; font-size: 24px; }
+  .bar { height: 10px; border-radius: 5px; background: var(--fill); overflow: hidden; margin: 6px 0 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+  .gest { display: flex; gap: 14px; align-items: flex-start; }
+  .gest .g { width: 44px; height: 44px; border-radius: 14px; background: var(--fill); display: grid; place-items: center; flex: none; color: var(--accent); }
+  kbd { font: 600 12px var(--font); padding: 2px 6px; border-radius: 6px; background: var(--fill); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ico = (path, bg) => `<span class="ico" style="background:${bg}"><svg class="i" viewBox="0 0 24 24">${path}</svg></span>`;
+const chev = `<svg class="i chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>`;
+const ACCENTS = ['#2f7cf6', '#5856d6', '#af52de', '#ff2d55', '#ff6b2c', '#ffb000', '#34c759', '#00b5c8', '#636366'];
+let S = null;
+const stack = ['main'];
+
+const views = {
+  main() {
+    const install = S.standalone ? '' : `
+      <div class="hero" style="margin-bottom:22px">
+        <img src="../../icons/icon.svg" alt="">
+        <div class="grow"><b>Install allo OS</b><span>${S.platform === 'ios' ? 'Share › Add to Home Screen' : 'Run full screen and offline'}</span></div>
+        ${S.canPromptInstall ? '<button class="btn small" style="background:#fff;color:#111" data-act="install">Install</button>' : `<button class="btn small" style="background:rgba(255,255,255,.25);color:#fff" data-go="install">How</button>`}
+      </div>`;
+    return `
+      <div class="titlebar"><h1>Settings</h1></div>
+      ${install}
+      <div class="group">
+        <button class="item has-icon" data-go="wallpaper">${ico('<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>', '#ff6b8b')}<div class="body"><div class="t">Wallpaper & style</div></div>${chev}</button>
+        <div class="item has-icon">${ico('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>', '#5856d6')}<div class="body"><div class="t">Appearance</div></div>
+          <div class="seg" style="width:170px">${['light', 'dark', 'auto'].map(t => `<button data-theme="${t}" class="${S.settings.theme === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
+      </div>
+      <div class="section-title">Display & lock</div>
+      <div class="group">
+        <label class="item has-icon">${ico('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', '#ff9500')}<div class="body"><div class="t">24-hour time</div></div><input type="checkbox" class="switch" data-set="clock24" ${S.settings.clock24 ? 'checked' : ''}></label>
+        <label class="item has-icon">${ico('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', '#34c759')}<div class="body"><div class="t">Auto-lock</div><div class="s">Lock after a minute away</div></div><input type="checkbox" class="switch" data-set="autoLock" ${S.settings.autoLock ? 'checked' : ''}></label>
+        <button class="item has-icon" data-act="lock">${ico('<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>', '#8e8e93')}<div class="body"><div class="t">Lock now</div></div></button>
+      </div>
+      <div class="section-title">Apps</div>
+      <div class="group">
+        <button class="item has-icon" data-go="apps">${ico('<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>', '#2f7cf6')}<div class="body"><div class="t">Installed apps</div></div><span class="v">${S.installed.length}</span>${chev}</button>
+        <button class="item has-icon" data-act="store">${ico('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/>', '#1662f0')}<div class="body"><div class="t">App Store</div></div>${chev}</button>
+      </div>
+      <div class="section-title">System</div>
+      <div class="group">
+        <button class="item has-icon" data-go="gestures">${ico('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5v-2a1.5 1.5 0 0 1 3 0V12M14 10.5a1.5 1.5 0 0 1 3 0V12M17 11.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 15a1.5 1.5 0 0 1 2.4-1.8L8 15"/>', '#00b5c8')}<div class="body"><div class="t">Gestures</div></div>${chev}</button>
+        <button class="item has-icon" data-go="storage">${ico('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>', '#636366')}<div class="body"><div class="t">Storage</div></div>${chev}</button>
+        <button class="item has-icon" data-go="about">${ico('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/>', '#8e8e93')}<div class="body"><div class="t">About</div></div>${chev}</button>
+      </div>`;
+  },
+
+  wallpaper() {
+    const custom = S.customWallpaper;
+    return nav('Wallpaper & style') + `
+      <div class="section-title">Wallpaper</div>
+      <div class="walls">
+        ${S.wallpapers.map(w => `<button data-wall="${w.id}" class="${S.settings.wallpaper === w.id ? 'on' : ''} ${w.light ? 'light' : ''}" style="background:${w.css.replace(/"/g, "'")}"><span class="name">${w.name}</span></button>`).join('')}
+        ${custom ? `<button data-wall="custom" class="on" style="background:url('${custom}') center/cover"><span class="name">Your photo</span></button>` : ''}
+        <label class="add" style="aspect-ratio:9/17;border-radius:16px;display:grid;place-items:center;background:var(--fill);color:var(--fg2);font-size:13px;font-weight:600;cursor:pointer;text-align:center">
+          <span><svg class="i" viewBox="0 0 24 24" style="width:26px;height:26px"><path d="M12 5v14M5 12h14"/></svg><br>Choose photo</span>
+          <input type="file" accept="image/*" id="wall-file" hidden>
+        </label>
+      </div>
+      <div class="section-title">Accent color</div>
+      <div class="group"><div class="accents">${ACCENTS.map(c => `<button data-accent="${c}" class="${S.settings.accent === c ? 'on' : ''}" style="background:${c};color:${c}" aria-label="${c}"></button>`).join('')}</div></div>
+      <div class="section-title">Appearance</div>
+      <div class="group"><div class="item"><div class="seg grow">${['light', 'dark', 'auto'].map(t => `<button data-theme="${t}" class="${S.settings.theme === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div></div>
+      <p class="foot">Auto follows your device’s light or dark setting.</p>`;
+  },
+
+  apps() {
+    const list = [...S.installed].sort((a, b) => a.name.localeCompare(b.name));
+    return nav('Installed apps') + `<div style="height:8px"></div><div class="group">
+      ${list.map(a => `<button class="item has-icon" data-app="${esc(a.id)}"><img class="app-ico" src="${esc(a.icon)}" alt=""><div class="body"><div class="t">${esc(a.name)}</div><div class="s">${esc(a.system ? 'System app' : a.webclip ? 'Web app' : (a.developer || '') + ' · v' + (a.version || '1.0'))}</div></div>${chev}</button>`).join('')}
+    </div><p class="foot">Tip: long-press any icon on the home screen to rearrange or remove apps.</p>`;
+  },
+
+  app(id) {
+    const a = S.installed.find(x => x.id === id);
+    if (!a) return views.apps();
+    return nav(a.name) + `
+      <div class="big-app"><img src="${esc(a.icon)}" alt=""><h2>${esc(a.name)}</h2><div class="muted">${esc(a.developer || '')}</div></div>
+      <div class="group">
+        <div class="item"><div class="body"><div class="t">Version</div></div><span class="v">${esc(a.version || '1.0')}</span></div>
+        <div class="item"><div class="body"><div class="t">Category</div></div><span class="v">${esc(a.category || '—')}</span></div>
+        <div class="item"><div class="body"><div class="t">Type</div></div><span class="v">${a.system ? 'System' : a.external ? (a.webclip ? 'Web app' : 'Third-party') : 'allo'}</span></div>
+      </div>
+      <p class="foot">${esc(a.description || '')}</p>
+      <div class="group" style="margin-top:18px">
+        <button class="item" data-open="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--accent)">Open</div></div></button>
+        ${a.system ? '' : `<button class="item" data-remove="${esc(a.id)}"><div class="body"><div class="t" style="color:var(--danger)">Remove app</div></div></button>`}
+      </div>`;
+  },
+
+  storage() {
+    setTimeout(loadStorage, 0);
+    return nav('Storage') + `<div style="height:8px"></div>
+      <div class="group"><div class="item" style="display:block;padding:16px">
+        <div class="row"><b class="grow" id="st-used">Calculating…</b><span class="muted" id="st-total"></span></div>
+        <div class="bar"><i id="st-bar" style="width:0"></i></div>
+        <div class="s muted" id="st-note">Space used by allo OS, apps, photos and recordings.</div>
+      </div></div>
+      <div class="section-title">Danger zone</div>
+      <div class="group"><button class="item" data-act="reset"><div class="body"><div class="t" style="color:var(--danger)">Erase all content and settings</div></div></button></div>`;
+  },
+
+  gestures() {
+    const g = (svg, t, s) => `<div class="item gest"><span class="g"><svg class="i" viewBox="0 0 24 24">${svg}</svg></span><div class="body"><div class="t">${t}</div><div class="s" style="white-space:normal">${s}</div></div></div>`;
+    return nav('Gestures') + `<div style="height:8px"></div><div class="group">
+      ${g('<path d="M12 19V5M6 11l6-6 6 6"/>', 'Go home', 'Swipe up from the bar at the bottom of the screen. Tapping it works too.')}
+      ${g('<rect x="3" y="6" width="5" height="12" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="6" width="5" height="12" rx="1.5"/>', 'Recent apps', 'Swipe up from the bottom and pause. Swipe a card up to close it.')}
+      ${g('<path d="M12 5v14M6 13l6 6 6-6"/>', 'Search', 'Swipe down anywhere on the home screen.')}
+      ${g('<path d="M4 4h16M12 8v12M7 15l5 5 5-5"/>', 'Control center', 'Swipe down from the very top of the home screen.')}
+      ${g('<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/>', 'Edit home screen', 'Long-press an icon, then drag to rearrange. Tap the minus to remove.')}
+    </div>
+    <div class="section-title">Keyboard</div>
+    <div class="group">
+      <div class="item"><div class="body"><div class="t">Go home</div></div><kbd>Esc</kbd></div>
+      <div class="item"><div class="body"><div class="t">Search</div></div><kbd>/</kbd></div>
+      <div class="item"><div class="body"><div class="t">Unlock</div></div><kbd>Enter</kbd></div>
+    </div>`;
+  },
+
+  install() {
+    const steps = S.platform === 'ios'
+      ? ['Open this page in Safari.', 'Tap the Share button.', 'Choose “Add to Home Screen”.', 'Open allo from your home screen.']
+      : S.platform === 'android'
+        ? ['Open this page in Chrome.', 'Tap the ⋮ menu.', 'Choose “Install app” or “Add to Home screen”.', 'Open allo from your home screen.']
+        : ['Open this page in Chrome or Edge.', 'Click the install icon in the address bar.', 'Choose “Install”.', 'allo OS opens in its own window.'];
+    return nav('Install allo OS') + `<div class="big-app"><img src="../../icons/icon.svg" alt=""><h2>allo OS</h2><div class="muted">Full screen. Works offline.</div></div>
+      <div class="group">${steps.map((s, i) => `<div class="item"><span class="ico" style="background:var(--accent);border-radius:50%;width:28px;height:28px;font-weight:700">${i + 1}</span><div class="body"><div class="t" style="white-space:normal">${s}</div></div></div>`).join('')}</div>
+      ${S.canPromptInstall ? '<div class="pad" style="margin-top:18px"><button class="btn primary block" data-act="install">Install now</button></div>' : ''}`;
+  },
+
+  about() {
+    return nav('About') + `<div class="big-app"><img src="../../icons/icon.svg" alt=""><h2>allo OS</h2><div class="muted">Version ${esc(S.version)}</div></div>
+      <div class="group">
+        <div class="item"><div class="body"><div class="t">Version</div></div><span class="v">${esc(S.version)}</span></div>
+        <div class="item"><div class="body"><div class="t">Device</div></div><span class="v">${S.platform === 'ios' ? 'iPhone / iPad' : S.platform === 'android' ? 'Android' : 'Computer'}</span></div>
+        <div class="item"><div class="body"><div class="t">Mode</div></div><span class="v">${S.standalone ? 'Installed' : 'Browser'}</span></div>
+        <div class="item"><div class="body"><div class="t">Apps</div></div><span class="v">${S.installed.length}</span></div>
+        <div class="item"><div class="body"><div class="t">Running</div></div><span class="v">${S.running.length}</span></div>
+      </div>
+      <p class="foot">allo OS is a simple, clean home for your apps. It runs on any phone, tablet or computer with a modern browser.</p>`;
+  }
+};
+
+function nav(title) {
+  return `<div class="navbar"><button class="back" data-back><svg class="i" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Back</button><div class="title">${esc(title)}</div><div class="right"></div></div>`;
+}
+
+function render(anim = false) {
+  if (!S) return;
+  const [name, arg] = stack[stack.length - 1].split(':');
+  const keepScroll = !anim && $('.view') ? $('.view').scrollTop : 0;
+  $('#root').innerHTML = `<div class="view ${anim ? 'enter' : ''}">${views[name](arg)}</div>`;
+  if (keepScroll) $('.view').scrollTop = keepScroll;
+  const f = $('#wall-file');
+  if (f) f.onchange = () => {
+    const file = f.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => allo.call('setWallpaperImage', r.result).catch(e => alert(e.message));
+    r.readAsDataURL(file);
+  };
+}
+
+async function loadStorage() {
+  const est = await allo.call('storageEstimate').catch(() => null);
+  const fmt = b => b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.round(b / 1e3) + ' KB';
+  if (!$('#st-used')) return;
+  if (!est) { $('#st-used').textContent = 'Not available'; return; }
+  $('#st-used').textContent = fmt(est.usage || 0) + ' used';
+  $('#st-total').textContent = 'of ' + fmt(est.quota || 0);
+  $('#st-bar').style.width = Math.max(1, (est.usage / est.quota) * 100) + '%';
+}
+
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button, [data-act]');
+  if (!t) return;
+  const d = t.dataset;
+  if (d.go) { stack.push(d.go); render(true); }
+  else if (d.back !== undefined) { stack.pop(); render(); }
+  else if (d.app) { stack.push('app:' + d.app); render(true); }
+  else if (d.theme) allo.call('setSetting', 'theme', d.theme);
+  else if (d.wall) allo.call('setSetting', 'wallpaper', d.wall);
+  else if (d.accent) allo.call('setSetting', 'accent', d.accent);
+  else if (d.open) allo.open(d.open);
+  else if (d.remove) { if (await allo.call('uninstall', d.remove)) { stack.pop(); render(); } }
+  else if (d.act === 'lock') allo.call('lock');
+  else if (d.act === 'store') allo.open('store');
+  else if (d.act === 'install') allo.call('promptInstall');
+  else if (d.act === 'reset') allo.call('reset');
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.set) allo.call('setSetting', t.dataset.set, t.checked);
+});
+
+allo.on('state', s => { S = s; render(); });
+allo.call('getState').then(s => { S = s; render(); }).catch(err => {
+  $('#root').innerHTML = `<div class="app"><div class="empty"><b>Open in allo OS</b>${esc(err.message)}</div></div>`;
+});
+</script>
+</body>
+</html>

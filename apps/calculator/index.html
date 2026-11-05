@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculator</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  body { overflow: hidden; }
+  .calc { height: 100%; display: flex; flex-direction: column; padding: var(--sat) 18px calc(var(--sab) + 16px); }
+  .screen { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; padding: 0 8px 18px; min-height: 0; }
+  .expr { font-size: 22px; color: var(--fg2); min-height: 30px; word-break: break-all; text-align: right; }
+  .out { font-size: 72px; font-weight: 300; line-height: 1.1; letter-spacing: -.02em; text-align: right; word-break: break-all; font-variant-numeric: tabular-nums; transition: font-size .15s; }
+  .keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .keys button { aspect-ratio: 1; border-radius: 50%; font-size: 28px; font-weight: 500; background: var(--card); box-shadow: var(--shadow); transition: filter .1s, transform .1s; }
+  :root[data-theme="dark"] .keys button { background: #2a2a2d; }
+  .keys button:active { filter: brightness(.88); transform: scale(.95); }
+  .keys .fn { color: var(--fg2); font-size: 22px; background: var(--fill) !important; box-shadow: none; }
+  .keys .op { color: #ff7a1a; font-size: 30px; }
+  .keys .eq { background: #ff7a1a !important; color: #fff; }
+  .keys .op.on { background: #ff7a1a !important; color: #fff; }
+  .keys .zero { grid-column: span 2; aspect-ratio: auto; border-radius: 999px; text-align: left; padding-left: 30px; }
+</style>
+</head>
+<body>
+<div class="calc">
+  <div class="screen"><div class="expr" id="expr"></div><div class="out" id="out">0</div></div>
+  <div class="keys">
+    <button class="fn" data-k="C">AC</button><button class="fn" data-k="±">±</button><button class="fn" data-k="%">%</button><button class="op" data-k="÷">÷</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><button class="op" data-k="×">×</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button class="op" data-k="−">−</button>
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button class="op" data-k="+">+</button>
+    <button class="zero" data-k="0">0</button><button data-k=".">.</button><button class="eq" data-k="=">=</button>
+  </div>
+</div>
+<script>
+let acc = null, cur = '0', op = null, fresh = true, lastOp = null, lastVal = null;
+const out = document.getElementById('out'), expr = document.getElementById('expr');
+const fmt = n => {
+  if (!isFinite(n)) return 'Error';
+  const r = parseFloat(n.toPrecision(12));
+  return Math.abs(r) >= 1e12 || (Math.abs(r) < 1e-9 && r !== 0) ? r.toExponential(6) : r.toLocaleString('en-US', { maximumFractionDigits: 10 });
+};
+const calc = (a, b, o) => o === '+' ? a + b : o === '−' ? a - b : o === '×' ? a * b : o === '÷' ? a / b : b;
+function show() {
+  const txt = cur.includes('e') || cur === 'Error' ? cur : (() => { const [i, d] = cur.split('.'); return Number(i).toLocaleString('en-US') .replace(/^-0$/, '-0') + (d !== undefined ? '.' + d : ''); })();
+  out.textContent = cur.startsWith('-') && txt === '0' ? '-0' : txt;
+  const len = out.textContent.length;
+  out.style.fontSize = len > 12 ? '40px' : len > 9 ? '52px' : len > 7 ? '62px' : '72px';
+  expr.textContent = acc !== null && op ? fmt(acc) + ' ' + op : '';
+  document.querySelector('[data-k="C"]').textContent = cur !== '0' || acc !== null ? 'C' : 'AC';
+  document.querySelectorAll('.op').forEach(b => b.classList.toggle('on', b.dataset.k === op && fresh));
+}
+function press(k) {
+  if (/^\d$/.test(k)) { if (fresh || cur === '0') cur = k; else if (cur.replace(/[-.]/g, '').length < 15) cur += k; fresh = false; }
+  else if (k === '.') { if (fresh) { cur = '0.'; fresh = false; } else if (!cur.includes('.')) cur += '.'; }
+  else if (k === 'C') { if (cur !== '0' && !fresh) cur = '0'; else { acc = null; op = null; cur = '0'; } fresh = true; }
+  else if (k === '±') { cur = cur.startsWith('-') ? cur.slice(1) : '-' + cur; }
+  else if (k === '%') { cur = String(parseFloat(cur) / 100); fresh = true; }
+  else if ('+−×÷'.includes(k)) {
+    if (acc !== null && op && !fresh) { acc = calc(acc, parseFloat(cur), op); cur = String(parseFloat(acc.toPrecision(12))); }
+    else if (acc === null || !fresh) acc = parseFloat(cur);
+    op = k; fresh = true;
+  } else if (k === '=') {
+    if (op && acc !== null) { lastVal = parseFloat(cur); lastOp = op; const r = calc(acc, lastVal, op); cur = isFinite(r) ? String(parseFloat(r.toPrecision(12))) : 'Error'; acc = null; op = null; }
+    else if (lastOp) { const r = calc(parseFloat(cur), lastVal, lastOp); cur = String(parseFloat(r.toPrecision(12))); }
+    fresh = true;
+  }
+  if (cur === 'Error' && k !== 'C') { acc = null; op = null; }
+  show();
+}
+document.querySelector('.keys').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { allo.haptic(6); press(b.dataset.k); } });
+addEventListener('keydown', e => {
+  const map = { '+': '+', '-': '−', '*': '×', 'x': '×', '/': '÷', 'Enter': '=', '=': '=', 'Escape': 'C', 'Backspace': 'B', '%': '%', '.': '.', ',': '.' };
+  if (/^\d$/.test(e.key)) press(e.key);
+  else if (map[e.key] === 'B') { if (!fresh) { cur = cur.length > 1 ? cur.slice(0, -1) : '0'; show(); } }
+  else if (map[e.key]) { e.preventDefault(); press(map[e.key]); }
+});
+show();
+</script>
+</body>
+</html>

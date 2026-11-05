@@ -1,0 +1,63 @@
+[
+  { "id": "settings", "name": "Settings", "version": "1.0", "developer": "allo", "category": "System",
+    "description": "Personalize allo OS: wallpaper, appearance, apps and storage.",
+    "entry": "apps/settings/index.html", "icon": "apps/settings/icon.svg", "files": [],
+    "system": true, "preinstalled": true, "dock": false },
+
+  { "id": "store", "name": "App Store", "version": "1.0", "developer": "allo", "category": "System",
+    "description": "Discover and install apps for allo OS.",
+    "entry": "apps/store/index.html", "icon": "apps/store/icon.svg", "files": [],
+    "system": true, "preinstalled": true, "dock": true },
+
+  { "id": "notes", "name": "Notes", "version": "1.0", "developer": "allo", "category": "Productivity",
+    "description": "Write down ideas, lists and anything else. Simple and fast.",
+    "entry": "apps/notes/index.html", "icon": "apps/notes/icon.svg", "files": [],
+    "preinstalled": true, "dock": true },
+
+  { "id": "camera", "name": "Camera", "version": "1.0", "developer": "allo", "category": "Photo",
+    "description": "Take photos with your device camera. They are saved to Gallery.",
+    "entry": "apps/camera/index.html", "icon": "apps/camera/icon.svg", "files": [],
+    "background": "#000", "statusBar": "light", "preinstalled": true, "dock": true },
+
+  { "id": "clock", "name": "Clock", "version": "1.0", "developer": "allo", "category": "Utilities",
+    "description": "World clock, stopwatch and timer.",
+    "entry": "apps/clock/index.html", "icon": "apps/clock/icon.svg", "files": [],
+    "preinstalled": true },
+
+  { "id": "calculator", "name": "Calculator", "version": "1.0", "developer": "allo", "category": "Utilities",
+    "description": "A clean calculator for everyday sums.",
+    "entry": "apps/calculator/index.html", "icon": "apps/calculator/icon.svg", "files": [],
+    "preinstalled": true },
+
+  { "id": "gallery", "name": "Gallery", "version": "1.0", "developer": "allo", "category": "Photo",
+    "description": "All your photos and drawings in one place.",
+    "entry": "apps/gallery/index.html", "icon": "apps/gallery/icon.svg", "files": [],
+    "preinstalled": true, "dock": true },
+
+  { "id": "weather", "name": "Weather", "version": "1.0", "developer": "allo", "category": "Weather",
+    "description": "Current conditions and a 7-day forecast for any city.",
+    "entry": "apps/weather/index.html", "icon": "apps/weather/icon.svg", "files": [],
+    "background": "#3d8fe6", "statusBar": "light",
+    "preinstalled": true },
+
+  { "id": "calendar", "name": "Calendar", "version": "1.0", "developer": "allo", "category": "Productivity",
+    "description": "A tidy month view with events you can add in seconds.",
+    "entry": "apps/calendar/index.html", "icon": "apps/calendar/icon.svg", "files": [],
+    "preinstalled": true },
+
+  { "id": "tasks", "name": "Tasks", "version": "1.0", "developer": "allo", "category": "Productivity",
+    "description": "Keep track of what needs doing. Check things off as you go.",
+    "entry": "apps/tasks/index.html", "icon": "apps/tasks/icon.svg", "files": [] },
+
+  { "id": "sketch", "name": "Sketch", "version": "1.0", "developer": "allo", "category": "Creativity",
+    "description": "Draw with your finger and save your art to Gallery.",
+    "entry": "apps/sketch/index.html", "icon": "apps/sketch/icon.svg", "files": [] },
+
+  { "id": "recorder", "name": "Recorder", "version": "1.0", "developer": "allo", "category": "Utilities",
+    "description": "Record voice memos and play them back any time.",
+    "entry": "apps/recorder/index.html", "icon": "apps/recorder/icon.svg", "files": [] },
+
+  { "id": "units", "name": "Converter", "version": "1.0", "developer": "allo", "category": "Utilities",
+    "description": "Convert length, weight, temperature, volume and speed.",
+    "entry": "apps/units/index.html", "icon": "apps/units/icon.svg", "files": [] }
+]

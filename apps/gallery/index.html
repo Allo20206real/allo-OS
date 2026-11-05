@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gallery</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 0 3px calc(var(--sab) + 20px); }
+  .grid button { aspect-ratio: 1; background: var(--fill) center / cover; border-radius: 4px; }
+  .day { padding: 16px 16px 8px; font-weight: 650; font-size: 15px; }
+  .viewer { position: fixed; inset: 0; z-index: 50; background: #000; display: flex; flex-direction: column; animation: aFade .2s; }
+  .viewer img { flex: 1; min-height: 0; object-fit: contain; width: 100%; }
+  .viewer .top, .viewer .bottom { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; color: #fff; }
+  .viewer .top { padding-top: calc(var(--sat) + 4px); }
+  .viewer .bottom { padding-bottom: calc(var(--sab) + 12px); justify-content: space-around; }
+  .viewer button { color: #fff; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; padding: 6px 12px; }
+  .viewer .meta { font-size: 13px; text-align: center; opacity: .8; }
+  .add { cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><h1>Gallery</h1><label class="icon-btn add" aria-label="Import photos"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><input type="file" accept="image/*" multiple hidden id="imp"></label></div>
+  <div class="scroll" id="list"></div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let photos = [], urls = [];
+
+async function load() {
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+  photos = await allo.photos.list().catch(() => []);
+  if (!photos.length) {
+    $('#list').innerHTML = `<div class="empty"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg><b>No photos yet</b>Photos from Camera and drawings from Sketch appear here.</div>`;
+    return;
+  }
+  const groups = new Map();
+  for (const p of photos) {
+    const k = new Date(p.created).toDateString();
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(p);
+  }
+  const label = k => { const d = new Date(k), t = new Date(); const y = new Date(Date.now() - 864e5); return k === t.toDateString() ? 'Today' : k === y.toDateString() ? 'Yesterday' : d.toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric' }); };
+  let html = '';
+  for (const [k, ps] of groups) {
+    html += `<div class="day">${label(k)}</div><div class="grid">` + ps.map(p => { const u = URL.createObjectURL(p.blob); urls.push(u); p.url = u; return `<button data-id="${p.id}" style="background-image:url(${u})"></button>`; }).join('') + '</div>';
+  }
+  $('#list').innerHTML = html;
+}
+
+function view(id) {
+  let i = photos.findIndex(p => p.id === id);
+  const v = document.createElement('div');
+  v.className = 'viewer';
+  const draw = () => {
+    const p = photos[i];
+    v.innerHTML = `<div class="top"><button data-a="close"><svg class="i" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><div class="meta">${new Date(p.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}<br>${p.source === 'sketch' ? 'Sketch' : p.source === 'camera' ? 'Camera' : 'Imported'}</div><span style="width:46px"></span></div>
+      <img src="${p.url}" alt="">
+      <div class="bottom">
+        <button data-a="share"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>Save</button>
+        <button data-a="del"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/></svg>Delete</button>
+      </div>`;
+  };
+  draw();
+  let sx = null;
+  v.addEventListener('pointerdown', e => { sx = e.clientX; });
+  v.addEventListener('pointerup', e => {
+    if (sx === null) return;
+    const dx = e.clientX - sx; sx = null;
+    if (Math.abs(dx) > 50) { i = Math.max(0, Math.min(photos.length - 1, i + (dx < 0 ? 1 : -1))); draw(); }
+  });
+  v.addEventListener('click', async e => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    const p = photos[i];
+    if (b.dataset.a === 'close') v.remove();
+    if (b.dataset.a === 'share') {
+      const file = new File([p.blob], `allo-${p.id}.${p.blob.type.includes('png') ? 'png' : 'jpg'}`, { type: p.blob.type });
+      if (navigator.canShare?.({ files: [file] })) { try { await navigator.share({ files: [file] }); } catch {} }
+      else { const a = document.createElement('a'); a.href = p.url; a.download = file.name; a.click(); }
+    }
+    if (b.dataset.a === 'del') { await allo.photos.remove(p.id); v.remove(); load(); }
+  });
+  document.body.append(v);
+}
+
+$('#list').addEventListener('click', e => { const b = e.target.closest('[data-id]'); if (b) view(b.dataset.id); });
+$('#imp').onchange = async e => { for (const f of e.target.files) await allo.photos.add(f, 'import'); e.target.value = ''; load(); };
+allo.on('show', load);
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>allo OS</title>
+  <meta name="description" content="allo OS — a simple, clean operating system for your phone.">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="allo">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="os/style.css">
+</head>
+<body>
+  <div id="device" class="locked">
+    <div id="wallpaper"></div>
+
+    <!-- Home screen -->
+    <main id="home" aria-label="Home screen">
+      <div id="search-hint"></div>
+      <div id="pages"></div>
+      <div id="dots"></div>
+      <div id="dock"></div>
+      <button id="edit-done" class="pill-btn" hidden>Done</button>
+    </main>
+
+    <!-- Search -->
+    <section id="search" aria-label="Search" hidden>
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search-input" type="search" placeholder="Search apps" autocomplete="off" spellcheck="false">
+        <button id="search-cancel">Cancel</button>
+      </div>
+      <div id="search-results"></div>
+    </section>
+
+    <!-- Running apps -->
+    <div id="windows"></div>
+
+    <!-- Recents -->
+    <section id="recents" aria-label="Recent apps" hidden>
+      <div id="recents-empty">No recent apps</div>
+      <button id="recents-clear" class="round-btn" aria-label="Close all apps">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </section>
+
+    <!-- Control center -->
+    <section id="control" aria-label="Control center" hidden>
+      <div class="cc-panel">
+        <div class="cc-head">
+          <div><div id="cc-time" class="cc-time"></div><div id="cc-date" class="cc-date"></div></div>
+          <button id="cc-settings" class="cc-gear" aria-label="Settings">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          </button>
+        </div>
+        <div class="cc-grid">
+          <button class="cc-tile" id="cc-net" aria-label="Network">
+            <svg viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.6a10 10 0 0 1 14 0M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/></svg>
+            <span class="cc-label">Network</span><span class="cc-sub" id="cc-net-sub">Online</span>
+          </button>
+          <button class="cc-tile" id="cc-dark" aria-label="Dark mode">
+            <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            <span class="cc-label">Dark mode</span><span class="cc-sub" id="cc-dark-sub">Off</span>
+          </button>
+          <button class="cc-tile" id="cc-full" aria-label="Full screen">
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            <span class="cc-label">Full screen</span><span class="cc-sub" id="cc-full-sub">Off</span>
+          </button>
+          <button class="cc-tile" id="cc-lock" aria-label="Lock">
+            <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <span class="cc-label">Lock</span><span class="cc-sub">Screen</span>
+          </button>
+        </div>
+        <label class="cc-slider" aria-label="Brightness">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <input id="cc-bright" type="range" min="30" max="100" value="100">
+        </label>
+      </div>
+    </section>
+
+    <!-- Lock screen -->
+    <section id="lock" aria-label="Lock screen">
+      <div class="lock-top">
+        <div id="lock-date" class="lock-date"></div>
+        <div id="lock-time" class="lock-time"></div>
+      </div>
+      <div id="lock-notes"></div>
+      <div class="lock-bottom">
+        <svg class="lock-chev" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
+        <span>Swipe up to open</span>
+      </div>
+    </section>
+
+    <!-- Setup -->
+    <section id="setup" hidden></section>
+
+    <!-- System chrome -->
+    <header id="statusbar">
+      <span id="sb-time"></span>
+      <span class="sb-right">
+        <svg id="sb-net" viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.6a10 10 0 0 1 14 0M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/></svg>
+        <span id="sb-batt" hidden><span id="sb-batt-pct"></span><span class="batt"><span id="sb-batt-fill"></span></span></span>
+      </span>
+    </header>
+    <div id="homebar" aria-label="Home"><span></span></div>
+    <div id="toasts"></div>
+    <div id="dialog-layer"></div>
+    <div id="dim"></div>
+  </div>
+
+  <script type="module" src="os/system.js"></script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendar</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  :root { --cal: #ef3348; }
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .head { display: flex; align-items: center; justify-content: space-between; padding: 6px 20px 12px; }
+  .head h1 { margin: 0; font-size: 28px; font-weight: 700; }
+  .head h1 span { color: var(--cal); }
+  .head .nav { display: flex; gap: 8px; }
+  .wk { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--fg2); text-align: center; }
+  .month { display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px 10px; row-gap: 4px; }
+  .d { aspect-ratio: 1 / 1.05; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 50%; font-size: 17px; font-variant-numeric: tabular-nums; position: relative; }
+  .d.out { color: var(--fg3); }
+  .d.today span { color: var(--cal); font-weight: 700; }
+  .d.sel span { background: var(--cal); color: #fff; font-weight: 600; }
+  .d span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; }
+  .d i { position: absolute; bottom: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--fg3); }
+  .d.sel i { background: var(--cal); }
+  .events { flex: 1; overflow-y: auto; padding: 8px 0 calc(var(--sab) + 90px); border-top: 1px solid var(--hair); margin-top: 6px; }
+  .ev { display: flex; gap: 12px; align-items: stretch; padding: 10px 16px; }
+  .ev .bar { width: 4px; border-radius: 2px; background: var(--c, var(--cal)); }
+  .ev .t { font-weight: 600; }
+  .ev .s { font-size: 13.5px; color: var(--fg2); }
+  .ev button { margin-left: auto; color: var(--fg3); }
+  .fab { background: var(--cal); box-shadow: 0 8px 24px rgba(239, 51, 72, .35); }
+  .colors { display: flex; gap: 12px; margin: 12px 0 16px; }
+  .colors button { width: 30px; height: 30px; border-radius: 50%; }
+  .colors button.on { box-shadow: 0 0 0 3px var(--card), 0 0 0 5px currentColor; }
+  label.lab { display: block; font-size: 13px; color: var(--fg2); font-weight: 600; margin: 12px 0 6px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="head"><h1 id="title"></h1><div class="nav"><button class="icon-btn" id="prev" aria-label="Previous month"><svg class="i" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button class="btn small" id="today">Today</button><button class="icon-btn" id="next" aria-label="Next month"><svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button></div></div>
+  <div class="wk" id="wk"></div>
+  <div class="month" id="month"></div>
+  <div class="events" id="events"></div>
+  <button class="fab" id="add" aria-label="New event"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const COLORS = ['#ef3348', '#2f7cf6', '#34c759', '#ff9500', '#af52de'];
+const key = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+let events = allo.store.get('events', []);
+let view = new Date(); view.setDate(1);
+let sel = new Date();
+
+$('#wk').innerHTML = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + i).toLocaleDateString([], { weekday: 'narrow' })).map(s => `<div>${s}</div>`).join('');
+
+function render() {
+  $('#title').innerHTML = `${view.toLocaleDateString([], { month: 'long' })} <span>${view.getFullYear()}</span>`;
+  const start = new Date(view); start.setDate(1 - view.getDay());
+  const tk = key(new Date()), sk = key(sel);
+  let html = '';
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const k = key(d);
+    const has = events.some(e => e.date === k);
+    html += `<button class="d ${d.getMonth() !== view.getMonth() ? 'out' : ''} ${k === tk ? 'today' : ''} ${k === sk ? 'sel' : ''}" data-k="${k}"><span>${d.getDate()}</span>${has ? '<i></i>' : ''}</button>`;
+  }
+  $('#month').innerHTML = html;
+  const list = events.filter(e => e.date === sk).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  $('#events').innerHTML = `<div class="section-title" style="margin-top:12px">${sel.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</div>` +
+    (list.length ? list.map(e => `<div class="ev" style="--c:${e.color}"><div class="bar"></div><div><div class="t">${esc(e.title)}</div><div class="s">${e.time ? fmtTime(e.time) : 'All day'}${e.note ? ' · ' + esc(e.note) : ''}</div></div><button data-del="${e.id}" aria-label="Delete"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`).join('')
+      : `<p class="muted" style="padding:0 20px">No events. Tap + to add one.</p>`);
+}
+const fmtTime = t => { const [h, m] = t.split(':'); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: !allo.env.clock24 }); };
+
+function addEvent() {
+  let color = COLORS[0];
+  const sh = allo.sheet(`<h2>New event</h2>
+    <input class="field" id="et" placeholder="Title">
+    <label class="lab">Date</label><input class="field" id="ed" type="date" value="${key(sel)}">
+    <label class="lab">Time (optional)</label><input class="field" id="eh" type="time">
+    <label class="lab">Note</label><input class="field" id="en" placeholder="Location or note">
+    <div class="colors">${COLORS.map((c, i) => `<button data-c="${c}" class="${i ? '' : 'on'}" style="background:${c};color:${c}"></button>`).join('')}</div>
+    <button class="btn primary block" id="esave" style="background:var(--cal)">Add event</button>`);
+  setTimeout(() => sh.querySelector('#et').focus(), 100);
+  sh.addEventListener('click', e => {
+    const c = e.target.closest('[data-c]');
+    if (c) { color = c.dataset.c; sh.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('on', b === c)); }
+    if (e.target.id === 'esave') {
+      const title = sh.querySelector('#et').value.trim();
+      if (!title) { sh.querySelector('#et').focus(); return; }
+      const date = sh.querySelector('#ed').value || key(sel);
+      events.push({ id: Date.now().toString(36), title, date, time: sh.querySelector('#eh').value, note: sh.querySelector('#en').value.trim(), color });
+      allo.store.set('events', events);
+      sel = new Date(date + 'T12:00'); view = new Date(sel); view.setDate(1);
+      sh.close(); render();
+    }
+  });
+}
+
+$('#month').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; sel = new Date(b.dataset.k + 'T12:00'); if (sel.getMonth() !== view.getMonth()) { view = new Date(sel); view.setDate(1); } render(); });
+$('#events').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (b) { events = events.filter(x => x.id !== b.dataset.del); allo.store.set('events', events); render(); } });
+$('#prev').onclick = () => { view.setMonth(view.getMonth() - 1); render(); };
+$('#next').onclick = () => { view.setMonth(view.getMonth() + 1); render(); };
+$('#today').onclick = () => { sel = new Date(); view = new Date(); view.setDate(1); render(); };
+$('#add').onclick = addEvent;
+let sx = null;
+$('#month').addEventListener('pointerdown', e => sx = e.clientX);
+$('#month').addEventListener('pointerup', e => { if (sx !== null && Math.abs(e.clientX - sx) > 60) { view.setMonth(view.getMonth() + (e.clientX < sx ? 1 : -1)); render(); } sx = null; });
+render();
+</script>
+</body>
+</html>

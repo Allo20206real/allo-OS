@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dice</title>
+<!-- Apps hosted elsewhere can load the SDK from the allo OS site, or copy it. -->
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; gap: 22px; }
+  .die { width: 110px; height: 110px; border-radius: 26px; background: var(--card); box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); padding: 16px; }
+  .die i { width: 18px; height: 18px; border-radius: 50%; background: #ff4f6d; place-self: center; visibility: hidden; }
+  .die.roll { animation: roll .5s cubic-bezier(.3,1.4,.5,1); }
+  @keyframes roll { from { transform: rotate(-200deg) scale(.6); } }
+  .total { text-align: center; font-size: 18px; color: var(--fg2); margin-bottom: 20px; }
+  .bottom { padding: 0 20px calc(var(--sab) + 20px); display: flex; flex-direction: column; gap: 12px; }
+  .btn.primary { background: #ff4f6d; height: 54px; font-size: 18px; }
+</style>
+</head>
+<body>
+<div class="app" style="height:100%">
+  <div class="titlebar"><h1>Dice</h1><div class="seg" style="width:120px"><button data-n="1">1</button><button data-n="2" class="on">2</button></div></div>
+  <div class="stage" id="stage"></div>
+  <div class="total" id="total">Tap Roll</div>
+  <div class="bottom"><button class="btn primary block" id="roll">Roll</button></div>
+</div>
+<script>
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+let n = 2;
+const die = v => `<div class="die roll">${Array.from({ length: 9 }, (_, i) => `<i style="visibility:${PIPS[v].includes(i) ? 'visible' : 'hidden'}"></i>`).join('')}</div>`;
+function roll() {
+  const vals = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 6));
+  document.getElementById('stage').innerHTML = vals.map(die).join('');
+  document.getElementById('total').textContent = n > 1 ? `Total ${vals.reduce((a, b) => a + b)}` : `You rolled ${vals[0]}`;
+  allo.haptic(20);
+}
+document.getElementById('roll').onclick = roll;
+document.querySelector('.seg').onclick = e => { const b = e.target.closest('[data-n]'); if (!b) return; n = +b.dataset.n; document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b)); roll(); };
+roll();
+</script>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clock</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .page { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .page > * { flex-shrink: 0; }
+  .face { width: 240px; height: 240px; margin: 18px auto 10px; position: relative; border-radius: 50%; background: var(--card); box-shadow: var(--shadow), inset 0 0 0 1px var(--hair); }
+  .face i { position: absolute; left: 50%; top: 8px; width: 2px; height: 10px; margin-left: -1px; background: var(--fg3); transform-origin: 1px 112px; border-radius: 1px; }
+  .face i.h { height: 14px; width: 3px; background: var(--fg); }
+  .hand { position: absolute; left: 50%; bottom: 50%; transform-origin: 50% 100%; border-radius: 4px; }
+  .hand.hr { width: 6px; height: 62px; margin-left: -3px; background: var(--fg); }
+  .hand.mn { width: 4px; height: 92px; margin-left: -2px; background: var(--fg); }
+  .hand.sc { width: 2px; height: 104px; margin-left: -1px; background: #ff7a1a; }
+  .face .pin { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; border-radius: 50%; background: #ff7a1a; box-shadow: 0 0 0 3px var(--card); }
+  .digital { text-align: center; font-size: 46px; font-weight: 250; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .date { text-align: center; color: var(--fg2); margin-bottom: 20px; }
+  .city .t { font-weight: 600; }
+  .city .time { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .big { text-align: center; font-size: 68px; font-weight: 200; font-variant-numeric: tabular-nums; margin: 40px 0 30px; letter-spacing: -.02em; }
+  .ctrls { display: flex; justify-content: space-between; padding: 0 32px; }
+  .round { width: 84px; height: 84px; border-radius: 50%; font-size: 17px; font-weight: 600; background: var(--fill); }
+  .round.go { background: rgba(52, 199, 89, .18); color: #1fae4b; }
+  .round.stop { background: rgba(255, 59, 48, .16); color: #ff3b30; }
+  .round:disabled { opacity: .4; }
+  .laps { margin-top: 26px; }
+  .laps .item .v { font-variant-numeric: tabular-nums; color: var(--fg); }
+  .ring { width: 260px; height: 260px; margin: 26px auto 26px; position: relative; display: grid; place-items: center; }
+  .ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+  .ring .num { font-size: 52px; font-weight: 250; font-variant-numeric: tabular-nums; }
+  .pickers { display: flex; justify-content: center; gap: 10px; margin: 30px 0; }
+  .pick { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .pick button { width: 64px; height: 36px; border-radius: 12px; background: var(--fill); font-size: 18px; }
+  .pick b { font-size: 46px; font-weight: 300; font-variant-numeric: tabular-nums; width: 80px; text-align: center; }
+  .pick span { font-size: 12px; color: var(--fg2); font-weight: 600; text-transform: uppercase; }
+  .presets { display: flex; gap: 8px; justify-content: center; margin-bottom: 26px; flex-wrap: wrap; padding: 0 16px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="page" id="page"></div>
+  <nav class="tabbar">
+    <button data-tab="clock" class="on"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Clock</button>
+    <button data-tab="stopwatch"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4M10 2h4M19 6l-1.5 1.5"/></svg>Stopwatch</button>
+    <button data-tab="timer"><svg class="i" viewBox="0 0 24 24"><path d="M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4"/></svg>Timer</button>
+  </nav>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let tab = 'clock';
+const CITIES = [['London', 'Europe/London'], ['New York', 'America/New_York'], ['Tokyo', 'Asia/Tokyo'], ['Sydney', 'Australia/Sydney'], ['Dubai', 'Asia/Dubai']];
+const two = n => String(n).padStart(2, '0');
+const fmtT = (d, tz) => d.toLocaleTimeString([], { hour: allo.env.clock24 ? '2-digit' : 'numeric', minute: '2-digit', hour12: !allo.env.clock24, timeZone: tz });
+
+// stopwatch state
+const sw = allo.store.get('sw', { start: 0, acc: 0, running: false, laps: [] });
+const swElapsed = () => sw.acc + (sw.running ? Date.now() - sw.start : 0);
+const fmtSw = ms => `${two(Math.floor(ms / 60000))}:${two(Math.floor(ms / 1000) % 60)}.${two(Math.floor(ms / 10) % 100)}`;
+// timer state
+const tm = allo.store.get('timer', { end: 0, total: 0, paused: 0, set: 300 });
+const tmLeft = () => tm.paused ? tm.paused : Math.max(0, tm.end - Date.now());
+const fmtTm = ms => { const s = Math.ceil(ms / 1000); const h = Math.floor(s / 3600); return (h ? h + ':' : '') + two(Math.floor(s / 60) % 60) + ':' + two(s % 60); };
+
+const views = {
+  clock() {
+    const marks = Array.from({ length: 60 }, (_, i) => i % 5 ? '' : `<i class="h" style="transform:rotate(${i * 6}deg)"></i>`).join('') +
+      Array.from({ length: 60 }, (_, i) => i % 5 ? `<i style="transform:rotate(${i * 6}deg);opacity:.5;height:6px"></i>` : '').join('');
+    return `<div class="titlebar"><h1>Clock</h1></div>
+      <div class="face">${marks}<div class="hand hr" id="hr"></div><div class="hand mn" id="mn"></div><div class="hand sc" id="sc"></div><div class="pin"></div></div>
+      <div class="digital" id="dig"></div><div class="date" id="date"></div>
+      <div class="section-title">World clock</div>
+      <div class="group" style="margin-bottom:24px">${CITIES.map(([c, tz]) => `<div class="item city"><div class="body"><div class="t">${c}</div><div class="s" data-off="${tz}"></div></div><div class="time" data-tz="${tz}"></div></div>`).join('')}</div>`;
+  },
+  stopwatch() {
+    return `<div class="titlebar"><h1>Stopwatch</h1></div>
+      <div class="big" id="swv">${fmtSw(swElapsed())}</div>
+      <div class="ctrls">
+        <button class="round" id="sw-lap" ${!sw.running && !swElapsed() ? 'disabled' : ''}>${sw.running || !swElapsed() ? 'Lap' : 'Reset'}</button>
+        <button class="round ${sw.running ? 'stop' : 'go'}" id="sw-go">${sw.running ? 'Stop' : 'Start'}</button>
+      </div>
+      <div class="laps">${sw.laps.length ? `<div class="group">${sw.laps.map((l, i) => `<div class="item"><div class="body">Lap ${sw.laps.length - i}</div><span class="v">${fmtSw(l)}</span></div>`).join('')}</div>` : ''}</div>`;
+  },
+  timer() {
+    const active = tm.end || tm.paused;
+    if (!active) {
+      const h = Math.floor(tm.set / 3600), m = Math.floor(tm.set / 60) % 60, s = tm.set % 60;
+      const p = (k, v, label) => `<div class="pick"><button data-adj="${k}:1">+</button><b>${two(v)}</b><button data-adj="${k}:-1">−</button><span>${label}</span></div>`;
+      return `<div class="titlebar"><h1>Timer</h1></div>
+        <div class="pickers">${p('h', h, 'hours')}${p('m', m, 'min')}${p('s', s, 'sec')}</div>
+        <div class="presets">${[60, 180, 300, 600, 900, 1800].map(v => `<button class="btn small" data-preset="${v}">${v >= 60 ? v / 60 + ' min' : v + ' s'}</button>`).join('')}</div>
+        <div class="ctrls"><button class="round" id="tm-cancel" disabled>Cancel</button><button class="round go" id="tm-start" ${tm.set ? '' : 'disabled'}>Start</button></div>`;
+    }
+    return `<div class="titlebar"><h1>Timer</h1></div>
+      <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="var(--fill)" stroke-width="4"/><circle id="arc" cx="50" cy="50" r="46" fill="none" stroke="#ff7a1a" stroke-width="4" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="0"/></svg><div class="num" id="tmv">${fmtTm(tmLeft())}</div></div>
+      <div class="ctrls"><button class="round" id="tm-cancel">Cancel</button><button class="round ${tm.paused ? 'go' : 'stop'}" id="tm-pause">${tm.paused ? 'Resume' : 'Pause'}</button></div>`;
+  }
+};
+
+function render() {
+  $('#page').innerHTML = views[tab]();
+  document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  frame();
+}
+
+function frame() {
+  const d = new Date();
+  if (tab === 'clock' && $('#hr')) {
+    const s = d.getSeconds() + d.getMilliseconds() / 1000, m = d.getMinutes() + s / 60, h = (d.getHours() % 12) + m / 60;
+    $('#hr').style.transform = `rotate(${h * 30}deg)`;
+    $('#mn').style.transform = `rotate(${m * 6}deg)`;
+    $('#sc').style.transform = `rotate(${Math.floor(s) * 6}deg)`;
+    $('#dig').textContent = d.toLocaleTimeString([], { hour: allo.env.clock24 ? '2-digit' : 'numeric', minute: '2-digit', second: '2-digit', hour12: !allo.env.clock24 });
+    $('#date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+    document.querySelectorAll('[data-tz]').forEach(e => e.textContent = fmtT(d, e.dataset.tz));
+    document.querySelectorAll('[data-off]').forEach(e => {
+      const local = new Date(d.toLocaleString('en-US', { timeZone: e.dataset.off }));
+      const diff = Math.round((local - new Date(d.toLocaleString('en-US'))) / 3600000);
+      const day = local.getDate() === d.getDate() ? 'Today' : local > d ? 'Tomorrow' : 'Yesterday';
+      e.textContent = `${day}, ${diff === 0 ? 'same time' : (diff > 0 ? '+' : '') + diff + ' h'}`;
+    });
+  }
+  if (tab === 'stopwatch' && $('#swv')) $('#swv').textContent = fmtSw(swElapsed());
+  if (tab === 'timer' && $('#tmv')) {
+    $('#tmv').textContent = fmtTm(tmLeft());
+    $('#arc').style.strokeDashoffset = String(289 * (1 - tmLeft() / Math.max(1, tm.total)));
+  }
+}
+
+function checkTimer() {
+  if (tm.end && !tm.paused && Date.now() >= tm.end) {
+    tm.end = 0; tm.paused = 0;
+    allo.store.set('timer', tm);
+    allo.notify('Timer done', 'Your ' + fmtTm(tm.total) + ' timer has finished.');
+    allo.haptic([200, 100, 200]);
+    if (tab === 'timer') render();
+  }
+}
+(function loop() { frame(); requestAnimationFrame(loop); })();
+setInterval(checkTimer, 500);
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; render(); return; }
+  if (t.id === 'sw-go') { if (sw.running) { sw.acc += Date.now() - sw.start; sw.running = false; } else { sw.start = Date.now(); sw.running = true; } }
+  if (t.id === 'sw-lap') { if (sw.running) sw.laps.unshift(swElapsed()); else { sw.acc = 0; sw.laps = []; } }
+  if (t.dataset.adj) { const [k, dv] = t.dataset.adj.split(':'); const step = { h: 3600, m: 60, s: 1 }[k]; const max = { h: 23, m: 59, s: 59 }[k]; const cur = Math.floor(tm.set / step) % (k === 'h' ? 24 : 60); const nv = (cur + +dv + max + 1) % (max + 1); tm.set += (nv - cur) * step; }
+  if (t.dataset.preset) tm.set = +t.dataset.preset;
+  if (t.id === 'tm-start') { tm.total = tm.set * 1000; tm.end = Date.now() + tm.total; tm.paused = 0; }
+  if (t.id === 'tm-cancel') { tm.end = 0; tm.paused = 0; }
+  if (t.id === 'tm-pause') { if (tm.paused) { tm.end = Date.now() + tm.paused; tm.paused = 0; } else { tm.paused = tmLeft(); } }
+  allo.store.set('sw', sw); allo.store.set('timer', tm);
+  render();
+});
+allo.on('env', () => frame());
+render();
+</script>
+</body>
+</html>

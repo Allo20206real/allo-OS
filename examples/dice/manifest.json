@@ -1,0 +1,10 @@
+{
+  "name": "Dice",
+  "version": "1.0",
+  "developer": "allo examples",
+  "category": "Games",
+  "description": "Roll one or two dice. A tiny example of a third-party allo app.",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "files": []
+}

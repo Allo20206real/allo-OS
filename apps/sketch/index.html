@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sketch</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 4px 14px 10px; }
+  .top h1 { margin: 0 auto 0 6px; font-size: 24px; font-weight: 700; }
+  .paper { flex: 1; margin: 0 12px; border-radius: 22px; background: #fff; box-shadow: var(--shadow), inset 0 0 0 1px var(--hair); overflow: hidden; position: relative; touch-action: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+  .tools { padding: 12px 14px calc(var(--sab) + 12px); display: flex; flex-direction: column; gap: 12px; }
+  .colors { display: flex; justify-content: space-between; }
+  .colors button { width: 32px; height: 32px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); transition: transform .15s; }
+  .colors button.on { transform: scale(1.18); box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+  .sizes { display: flex; align-items: center; gap: 10px; }
+  .sizes input { flex: 1; accent-color: var(--accent); }
+  .tbtn.on { background: var(--accent); color: #fff; }
+  .saved { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: rgba(0,0,0,.75); color: #fff; padding: 8px 14px; border-radius: 14px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .saved.on { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <h1>Sketch</h1>
+    <button class="icon-btn" id="undo" aria-label="Undo"><svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+    <button class="icon-btn" id="clear" aria-label="Clear"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg></button>
+    <button class="btn small primary" id="save">Save</button>
+  </div>
+  <div class="paper" id="paper"><canvas id="c"></canvas><div class="saved" id="saved">Saved to Gallery</div></div>
+  <div class="tools">
+    <div class="colors" id="colors"></div>
+    <div class="sizes">
+      <button class="icon-btn tbtn" id="eraser" aria-label="Eraser"><svg class="i" viewBox="0 0 24 24"><path d="m7 21-4-4L14 6l7 7-8 8H7zM10 10l7 7"/></svg></button>
+      <input type="range" id="size" min="2" max="40" value="6" aria-label="Brush size">
+    </div>
+  </div>
+</div>
+<script>
+const COLORS = ['#111111', '#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00b5c8', '#2f7cf6', '#af52de', '#ff2d55'];
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+let color = COLORS[0], erasing = false, strokes = [], cur = null, dpr = 1;
+document.getElementById('colors').innerHTML = COLORS.map((x, i) => `<button data-c="${x}" class="${i ? '' : 'on'}" style="background:${x}" aria-label="${x}"></button>`).join('');
+
+function resize() {
+  const r = c.getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1;
+  c.width = r.width * dpr; c.height = r.height * dpr;
+  redraw();
+}
+function drawStroke(s) {
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.lineCap = ctx.lineJoin = 'round';
+  ctx.strokeStyle = s.erase ? '#fff' : s.color;
+  ctx.lineWidth = s.size;
+  ctx.beginPath();
+  const p = s.pts;
+  ctx.moveTo(p[0][0], p[0][1]);
+  if (p.length === 1) ctx.lineTo(p[0][0] + .1, p[0][1]);
+  for (let i = 1; i < p.length - 1; i++) { const mx = (p[i][0] + p[i + 1][0]) / 2, my = (p[i][1] + p[i + 1][1]) / 2; ctx.quadraticCurveTo(p[i][0], p[i][1], mx, my); }
+  if (p.length > 1) ctx.lineTo(p[p.length - 1][0], p[p.length - 1][1]);
+  ctx.stroke();
+  ctx.restore();
+}
+function redraw() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); strokes.forEach(drawStroke); if (cur) drawStroke(cur); }
+const pos = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); cur = { color, erase: erasing, size: +document.getElementById('size').value * (erasing ? 2 : 1), pts: [pos(e)] }; redraw(); });
+c.addEventListener('pointermove', e => { if (!cur) return; for (const ev of e.getCoalescedEvents?.() || [e]) cur.pts.push(pos(ev)); redraw(); });
+const end = () => { if (cur) { strokes.push(cur); cur = null; } };
+c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+document.getElementById('colors').onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; color = b.dataset.c; erasing = false; document.getElementById('eraser').classList.remove('on'); document.querySelectorAll('[data-c]').forEach(x => x.classList.toggle('on', x === b)); };
+document.getElementById('eraser').onclick = e => { erasing = !erasing; e.currentTarget.classList.toggle('on', erasing); };
+document.getElementById('undo').onclick = () => { strokes.pop(); redraw(); };
+document.getElementById('clear').onclick = () => { strokes = []; redraw(); };
+document.getElementById('save').onclick = async () => {
+  if (!strokes.length) return;
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  await allo.photos.add(blob, 'sketch');
+  const s = document.getElementById('saved'); s.classList.add('on'); setTimeout(() => s.classList.remove('on'), 1400);
+};
+new ResizeObserver(resize).observe(c);
+</script>
+</body>
+</html>

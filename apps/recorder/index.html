@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recorder</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  :root { --rc: #e1323f; }
+  body { overflow: hidden; }
+  .app { height: 100%; }
+  .rec { display: flex; align-items: center; gap: 12px; padding: 12px 16px; position: relative; }
+  .rec + .rec::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--hair); }
+  .rec .t { font-weight: 600; }
+  .rec .s { font-size: 13px; color: var(--fg2); }
+  .play { width: 40px; height: 40px; border-radius: 50%; background: var(--fill); display: grid; place-items: center; flex: none; }
+  .play.on { background: var(--rc); color: #fff; }
+  .bottom { padding: 14px 16px calc(var(--sab) + 18px); display: flex; flex-direction: column; align-items: center; gap: 12px; border-top: 1px solid var(--hair); background: var(--card); }
+  canvas { width: 100%; height: 70px; }
+  .time { font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .big { width: 74px; height: 74px; border-radius: 50%; border: 4px solid var(--fill2); display: grid; place-items: center; }
+  .big i { width: 56px; height: 56px; border-radius: 50%; background: var(--rc); transition: all .25s; }
+  .big.on i { width: 28px; height: 28px; border-radius: 8px; }
+  .err { color: var(--danger); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><h1>Recorder</h1></div>
+  <div class="scroll" id="list"></div>
+  <div class="bottom">
+    <canvas id="wave"></canvas>
+    <div class="time" id="time">00:00</div>
+    <div class="err" id="err" hidden></div>
+    <button class="big" id="btn" aria-label="Record"><i></i></button>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const two = n => String(n).padStart(2, '0');
+const fmt = s => `${two(Math.floor(s / 60))}:${two(Math.floor(s % 60))}`;
+function db() { return new Promise((res, rej) => { const r = indexedDB.open('app.recorder', 1); r.onupgradeneeded = () => r.result.createObjectStore('memos', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function store(mode, fn) { const d = await db(); return new Promise((res, rej) => { const t = d.transaction('memos', mode); const q = fn(t.objectStore('memos')); t.oncomplete = () => res(q?.result); t.onerror = () => rej(t.error); }); }
+
+let memos = [], playing = null, audio = new Audio(), rec = null, chunks = [], t0 = 0, stream = null, analyser = null, raf = 0;
+async function load() {
+  memos = ((await store('readonly', s => s.getAll())) || []).sort((a, b) => b.created - a.created);
+  $('#list').innerHTML = memos.length ? `<div class="group">${memos.map((m, i) => `<div class="rec" data-id="${m.id}"><button class="play ${playing === m.id ? 'on' : ''}" aria-label="Play">${playing === m.id ? '<svg class="i" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>' : '<svg class="i" viewBox="0 0 24 24"><path d="M7 4v16l13-8z" fill="currentColor"/></svg>'}</button><div class="grow"><div class="t">Memo ${memos.length - i}</div><div class="s">${new Date(m.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${fmt(m.duration)}</div></div><button class="del" aria-label="Delete" style="color:var(--fg3)"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg></button></div>`).join('')}</div>`
+    : `<div class="empty"><svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><b>No recordings</b>Tap the red button to record a voice memo.</div>`;
+}
+function draw() {
+  const c = $('#wave'), ctx = c.getContext('2d'), dpr = devicePixelRatio || 1;
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (analyser) {
+    const buf = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(buf);
+    const bars = 48, w = c.width / bars;
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--rc");
+    for (let i = 0; i < bars; i++) {
+      let m = 0; for (let j = 0; j < 8; j++) m = Math.max(m, Math.abs(buf[(i * 8 + j) % buf.length] - 128));
+      const h = Math.max(3 * dpr, (m / 128) * c.height * 1.6);
+      ctx.beginPath(); ctx.roundRect(i * w + w * .25, (c.height - h) / 2, w * .5, Math.min(h, c.height), 3 * dpr); ctx.fill();
+    }
+    $('#time').textContent = fmt((Date.now() - t0) / 1000);
+  }
+  raf = requestAnimationFrame(draw);
+}
+async function start() {
+  $('#err').hidden = true;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { $('#err').textContent = 'Allow microphone access to record.'; $('#err').hidden = false; return; }
+  const ac = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = ac.createAnalyser(); analyser.fftSize = 512;
+  ac.createMediaStreamSource(stream).connect(analyser);
+  chunks = [];
+  rec = new MediaRecorder(stream);
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = async () => {
+    const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+    const duration = (Date.now() - t0) / 1000;
+    stream.getTracks().forEach(t => t.stop()); ac.close(); analyser = null; rec = null;
+    await store('readwrite', s => s.put({ id: Date.now().toString(36), blob, duration, created: Date.now() }));
+    $('#btn').classList.remove('on'); $('#time').textContent = '00:00';
+    load();
+  };
+  rec.start(); t0 = Date.now();
+  $('#btn').classList.add('on');
+}
+$('#btn').onclick = () => { if (rec) rec.stop(); else start(); };
+$('#list').addEventListener('click', async e => {
+  const row = e.target.closest('.rec'); if (!row) return;
+  const m = memos.find(x => x.id === row.dataset.id);
+  if (e.target.closest('.del')) { if (playing === m.id) audio.pause(); await store('readwrite', s => s.delete(m.id)); playing = null; load(); return; }
+  if (e.target.closest('.play')) {
+    if (playing === m.id) { audio.pause(); playing = null; }
+    else { if (audio.src) URL.revokeObjectURL(audio.src); audio.src = URL.createObjectURL(m.blob); audio.play(); playing = m.id; }
+    load();
+  }
+});
+audio.onended = () => { playing = null; load(); };
+allo.on('hide', () => { audio.pause(); playing = null; });
+if (!window.MediaRecorder) { $('#err').textContent = 'Recording is not supported in this browser.'; $('#err').hidden = false; $('#btn').disabled = true; }
+load(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Converter</title>
+<link rel="stylesheet" href="../../sdk/allo.css">
+<script src="../../sdk/allo.js"></script>
+<style>
+  :root { --u: #109f99; }
+  .cats { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 14px; scrollbar-width: none; }
+  .cats::-webkit-scrollbar { display: none; }
+  .cats button { flex: none; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--fill); font-weight: 600; font-size: 14px; color: var(--fg2); }
+  .cats button.on { background: var(--u); color: #fff; }
+  .box { background: var(--card); border-radius: 22px; margin: 0 16px; padding: 18px; box-shadow: var(--shadow); }
+  .box select { width: 100%; border: 0; background: none; color: var(--fg2); font: 600 15px var(--font); outline: none; padding: 0; margin-bottom: 4px; }
+  .box input { width: 100%; border: 0; background: none; color: var(--fg); font: 300 42px var(--font); outline: none; padding: 0; font-variant-numeric: tabular-nums; }
+  .box output { display: block; font: 300 42px var(--font); color: var(--u); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .swap { display: flex; justify-content: center; margin: -10px 0; position: relative; z-index: 2; }
+  .swap button { width: 46px; height: 46px; border-radius: 50%; background: var(--u); color: #fff; display: grid; place-items: center; box-shadow: 0 0 0 5px var(--bg); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><h1>Converter</h1></div>
+  <div class="cats" id="cats"></div>
+  <div class="box"><select id="from"></select><input id="val" inputmode="decimal" value="1"></div>
+  <div class="swap"><button id="swap" aria-label="Swap units"><svg class="i" viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg></button></div>
+  <div class="box"><select id="to"></select><output id="out"></output></div>
+  <p class="foot" id="formula" style="text-align:center"></p>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const U = {
+  Length: { m: ['Meters', 1], km: ['Kilometers', 1000], cm: ['Centimeters', .01], mm: ['Millimeters', .001], mi: ['Miles', 1609.344], yd: ['Yards', .9144], ft: ['Feet', .3048], in: ['Inches', .0254] },
+  Weight: { kg: ['Kilograms', 1], g: ['Grams', .001], mg: ['Milligrams', 1e-6], t: ['Tonnes', 1000], lb: ['Pounds', .45359237], oz: ['Ounces', .028349523] },
+  Temperature: { C: ['Celsius'], F: ['Fahrenheit'], K: ['Kelvin'] },
+  Volume: { l: ['Liters', 1], ml: ['Milliliters', .001], gal: ['US gallons', 3.785411784], qt: ['US quarts', .946352946], cup: ['US cups', .2365882365], floz: ['US fl oz', .0295735296] },
+  Speed: { kmh: ['km/h', 1 / 3.6], ms: ['m/s', 1], mph: ['mph', .44704], kn: ['Knots', .514444] },
+  Area: { m2: ['Square meters', 1], km2: ['Square km', 1e6], ha: ['Hectares', 1e4], acre: ['Acres', 4046.8564224], ft2: ['Square feet', .09290304] },
+  Data: { B: ['Bytes', 1], KB: ['Kilobytes', 1e3], MB: ['Megabytes', 1e6], GB: ['Gigabytes', 1e9], TB: ['Terabytes', 1e12] }
+};
+const DEF = { Length: ['km', 'mi'], Weight: ['kg', 'lb'], Temperature: ['C', 'F'], Volume: ['l', 'gal'], Speed: ['kmh', 'mph'], Area: ['m2', 'ft2'], Data: ['GB', 'MB'] };
+let s = allo.store.get('s', { cat: 'Length', from: 'km', to: 'mi' });
+const toC = (v, u) => u === 'C' ? v : u === 'F' ? (v - 32) * 5 / 9 : v - 273.15;
+const fromC = (v, u) => u === 'C' ? v : u === 'F' ? v * 9 / 5 + 32 : v + 273.15;
+function conv(v) { return s.cat === 'Temperature' ? fromC(toC(v, s.from), s.to) : v * U[s.cat][s.from][1] / U[s.cat][s.to][1]; }
+const nice = n => !isFinite(n) ? '—' : Math.abs(n) >= 1e9 || (Math.abs(n) < 1e-6 && n) ? n.toExponential(4) : parseFloat(n.toPrecision(8)).toLocaleString('en-US', { maximumFractionDigits: 8 });
+function render() {
+  $('#cats').innerHTML = Object.keys(U).map(c => `<button data-c="${c}" class="${c === s.cat ? 'on' : ''}">${c}</button>`).join('');
+  const opts = Object.entries(U[s.cat]).map(([k, [n]]) => `<option value="${k}">${n}</option>`).join('');
+  $('#from').innerHTML = opts; $('#to').innerHTML = opts;
+  $('#from').value = s.from; $('#to').value = s.to;
+  calc();
+}
+function calc() {
+  const v = parseFloat($('#val').value.replace(',', '.'));
+  $('#out').textContent = isNaN(v) ? '0' : nice(conv(v));
+  $('#formula').textContent = `1 ${U[s.cat][s.from][0]} = ${nice(conv(1))} ${U[s.cat][s.to][0]}`;
+  allo.store.set('s', s);
+}
+$('#cats').onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; s.cat = b.dataset.c; [s.from, s.to] = DEF[s.cat]; render(); };
+$('#from').onchange = e => { s.from = e.target.value; calc(); };
+$('#to').onchange = e => { s.to = e.target.value; calc(); };
+$('#val').oninput = calc;
+$('#swap').onclick = () => { [s.from, s.to] = [s.to, s.from]; render(); };
+render();
+</script>
+</body>
+</html>
