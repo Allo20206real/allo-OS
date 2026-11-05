@@ -8,7 +8,41 @@ allo OS is a Progressive Web App (PWA). Once installed it opens full screen
 from its own home-screen icon and works offline. It runs on iPhone, Android,
 tablets and computers.
 
-## Install it on your phone
+## Make it your phone's real home screen (Android)
+
+allo OS ships as an Android launcher app. Once installed, it **replaces your
+home screen**: it shows your phone's real apps with their real icons, opens
+them, uninstalls them, and sits on your real wallpaper with the real status
+bar and notifications.
+
+1. On your Android phone, download **allo-os.apk** from the
+   [latest release](../../releases/latest) (built automatically from `main`).
+2. Open it and allow installing apps from your browser when asked.
+3. Press **Home** and choose **allo** → **Always**, or open allo and tap
+   **Set as home screen**.
+
+On the allo home screen:
+- Every app on your phone is on the home pages (no app drawer). New apps
+  appear automatically; uninstalled ones disappear.
+- Long-press an icon to rearrange; tap the minus to uninstall the app from the phone.
+- Swipe down from the top for notifications, or anywhere else to search
+  (search can also look things up on Google Play).
+- **Back** steps back inside allo apps; **Home** returns to the first page.
+- The App Store opens Google Play for Android apps, and installs allo apps.
+- *Customize* changes wallpaper (your phone's own, or an allo one), theme and accent color.
+
+To switch back, go to **Settings → Apps → Default apps → Home app** on your phone.
+
+iPhones don't allow any app to replace the home screen, so on iPhone allo
+runs as an installed web app (below).
+
+The Android project lives in [`android/`](android). It bundles the web shell
+into the APK and adds a small Java bridge (`AlloNative`) for apps, icons,
+launching, uninstalling, wallpaper and system bars. The signing key in
+`android/allo-release.keystore` is public so every build can update the last;
+replace it with your own before distributing more widely.
+
+## Install it as a web app (any phone)
 
 1. Open the allo OS URL on your phone (see *Hosting* below).
 2. **iPhone / iPad (Safari):** tap **Share** → **Add to Home Screen**.
